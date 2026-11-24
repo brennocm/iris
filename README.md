@@ -10,13 +10,14 @@
 [![ci](https://github.com/brennocm/iris/actions/workflows/ci.yml/badge.svg)](https://github.com/brennocm/iris/actions/workflows/ci.yml)
 
 Android runtime self-protection SDK. Iris looks for root, instrumentation (Frida, Xposed,
-LSPosed), debuggers and repackaging, and returns what it found as a report for your backend.
+LSPosed), debuggers, emulators and repackaging, and returns what it found as a report for your backend.
 It never blocks or kills the app: the decision belongs on the server, next to a Play Integrity
 verdict.
 
-> **Status:** early (v0.1, not on Maven Central). Tested on an Android 14 emulator, clean,
+> **Status:** early (v0.1, not on Maven Central yet). Tested on an Android 14 emulator, clean,
 > rooted and with Frida injected ([results](docs/scenarios.md)); not yet on real devices. The
-> verifier does not call the Play Integrity API yet. Do not rely on it in production.
+> verifier's Play Integrity check is tested against a fake API only, not with a real token. Do
+> not rely on it in production.
 
 Write-up: [Iris: an Android self-protection SDK that decides nothing](https://brennocm.github.io/articles/en-us/iris.html)
 ([português](https://brennocm.github.io/articles/pt-br/iris.html)).
@@ -155,8 +156,10 @@ and smoke test of the verifier's Docker image, and on an emulator the device tes
 - `iris/`: the Android library; `src/main/cpp/` has the native probes, `src/androidTest/` the
   device tests.
 - `sample/`: a minimal app used by the device scenarios.
-- `server/`: the reference verifier (Go).
-- `scripts/`: the end-to-end script and the Frida script used in [the scenarios](docs/scenarios.md).
+- `server/`: the reference verifier (Go) and its Dockerfile.
+- `schema/`: JSON Schema of the report and example reports that the Kotlin and Go tests both
+  check, so the two sides cannot drift apart.
+- `scripts/`: the end-to-end scripts and the Frida script used in [the scenarios](docs/scenarios.md).
 - `docs/adr/`: design decisions. `SPEC.md`: scope and roadmap.
 
 ## License
