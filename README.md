@@ -7,14 +7,19 @@
 
 # Iris
 
+[![ci](https://github.com/brennocm/iris/actions/workflows/ci.yml/badge.svg)](https://github.com/brennocm/iris/actions/workflows/ci.yml)
+
 Android runtime self-protection SDK. Iris looks for root, instrumentation (Frida, Xposed,
 LSPosed), debuggers and repackaging, and returns what it found as a report for your backend.
 It never blocks or kills the app: the decision belongs on the server, next to a Play Integrity
 verdict.
 
-> **Status:** early (v0.1, unpublished). Tested on an Android 14 emulator, clean, rooted and
-> with Frida injected ([results](docs/scenarios.md)); not yet on a range of real devices. Do
-> not rely on it in production yet.
+> **Status:** early (v0.1, not on Maven Central). Tested on an Android 14 emulator, clean,
+> rooted and with Frida injected ([results](docs/scenarios.md)); not yet on real devices. The
+> verifier does not call the Play Integrity API yet. Do not rely on it in production.
+
+Write-up: [Iris: an Android self-protection SDK that decides nothing](https://brennocm.github.io/articles/en-us/iris.html)
+([português](https://brennocm.github.io/articles/pt-br/iris.html)).
 
 ## Why signals and not a verdict
 
@@ -71,11 +76,13 @@ The report:
 
 ```json
 {"schema":1,
- "signals":[{"id":"HOOK-001","probe":"maps","evidence":"/data/local/tmp/re.frida.server/frida-agent-64.so"}],
+ "signals":[{"id":"HOOK-001","probe":"maps","evidence":"/memfd:frida-agent-64.so (deleted)"}],
  "unavailable":[{"probe":"tracer","reason":"could not read /proc/self/status"}]}
 ```
 
-Treat `unavailable` as suspicious, not as clean.
+Treat `unavailable` as suspicious, not as clean. The SDK never throws into the host app: a
+missing `libiris.so`, an oversized `/proc` file or a keystore failure shows up as an
+unavailable probe or as `attestation_error` in the message.
 
 ## Verifying on the server
 
@@ -83,7 +90,30 @@ Treat `unavailable` as suspicious, not as clean.
 standard library. It issues challenges, checks the attestation chain against Google's roots and
 revocation list, the challenge, the app identity, the signature and the root of trust, then
 applies a default policy: HOOK and TAMPER signals deny, ROOT and DEBUG signals and blinded
-probes go to review ([ADR 0006](docs/adr/0006-reference-verifier.md)).
+probes go to review ([ADR 0006](docs/adr/0006-reference-verifier.md)). Play Integrity
+verdicts are checked behind a `Decoder` interface; wiring the authenticated API call is on the
+roadmap.
+
+## Results on an emulator
+
+Android 14 (API 34, `google_apis` x86_64), sample app, verifier trusting the emulator's test
+root for the run. Full steps in [docs/scenarios.md](docs/scenarios.md).
+
+| Scenario | Report | Decision |
+| --- | --- | --- |
+| Clean | no signals | review (software attestation, no hardware root of trust) |
+| Clean, Google roots only | no signals | deny (emulator chain is not Google's production root) |
+| Frida injected, libc hooked to hide it | HOOK-001, HOOK-002 | deny |
+
+The Frida run used a script that hooks libc `openat`, `read` and `strstr` to hide the agent.
+Iris reads `/proc` with raw syscalls, so the hooks never saw its reads.
+
+## What it does not do
+
+It cannot stop someone who controls the process: hooking the SDK's own Kotlin methods or
+patching `libiris.so` gets past every probe, and the signed message proves freshness, app
+identity and boot state, not that the report is honest. Name matching misses a renamed Frida,
+and Magisk DenyList hides its mounts. See [the threat model](docs/threat-model.md).
 
 ## Building
 
@@ -94,7 +124,12 @@ NDK 27.0.12077973 and CMake 3.22.1 (`ANDROID_HOME` set).
 mise install
 mise run check       # compile, unit tests, lint, Go vet and tests
 mise run check:all   # plus release builds for all four ABIs and the Go race detector
+
+./gradlew :iris:connectedDebugAndroidTest   # device tests, with an emulator running
+scripts/e2e.sh                              # challenge -> sample app -> verifier
 ```
+
+CI runs `check:all`, `govulncheck` and the device tests on an emulator for every push.
 
 ## Layout
 
