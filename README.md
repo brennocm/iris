@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/iris-logo.webp" alt="Iris: Android runtime self-protection SDK" width="520">
+</p>
+
 # Iris
 
 Android runtime self-protection SDK. Iris looks for root, instrumentation (Frida, Xposed,
