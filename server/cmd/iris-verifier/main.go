@@ -183,6 +183,9 @@ func run(log *slog.Logger) error {
 
 const challengeTTL = 2 * time.Minute
 
+// statusRetry is the first retry delay after a failed revocation list load (a var for tests).
+var statusRetry = 30 * time.Second
+
 type deps struct {
 	log      *slog.Logger
 	v        *verifier.Verifier
@@ -252,17 +255,23 @@ func refreshStatus(ctx context.Context, log *slog.Logger, v *verifier.Verifier, 
 		v.SetStatusList(&attestation.StatusList{})
 		return
 	}
+	// Refresh hourly. After a failure retry sooner, doubling up to the hourly interval, so an
+	// instance that started during a network blip does not stay unready (/readyz) for an hour.
+	retry := statusRetry
 	for {
+		wait := time.Hour
 		if s, err := loadStatus(ctx, source); err != nil {
-			log.Warn("revocation list refresh failed", "err", err)
+			log.Warn("revocation list refresh failed", "err", err, "retry_in", retry.String())
+			wait, retry = retry, min(2*retry, time.Hour)
 		} else {
 			v.SetStatusList(s)
 			log.Info("revocation list loaded", "entries", len(s.Entries))
+			retry = statusRetry
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Hour):
+		case <-time.After(wait):
 		}
 	}
 }

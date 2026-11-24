@@ -130,14 +130,18 @@ NDK 27.0.12077973 and CMake 3.22.1 (`ANDROID_HOME` set).
 
 ```sh
 mise install
-mise run check       # compile, unit tests, lint, Go vet and tests
+mise run check       # format (ktlint, gofmt), compile, unit tests, lint, Go vet and tests
 mise run check:all   # plus release builds for all four ABIs and the Go race detector
+mise run fix         # apply ktlint and gofmt
 
 ./gradlew :iris:connectedDebugAndroidTest   # device tests, with an emulator running
 scripts/e2e.sh                              # challenge -> sample app -> verifier
+scripts/e2e-ci.sh                           # the same, twice, with the expected decisions asserted
 ```
 
-CI runs `check:all`, `govulncheck` and the device tests on an emulator for every push.
+CI runs `check:all` (with a real Redis for the challenge store tests), `govulncheck`, a build
+and smoke test of the verifier's Docker image, and on an emulator the device tests and
+`scripts/e2e-ci.sh` for every push.
 
 ## Layout
 

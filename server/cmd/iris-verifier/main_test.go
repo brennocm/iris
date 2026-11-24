@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -118,5 +121,29 @@ func TestChallengeEndpointIsRateLimited(t *testing.T) {
 	}
 	if codes[2] != http.StatusOK || codes[3] != http.StatusTooManyRequests {
 		t.Fatalf("status codes %v", codes)
+	}
+}
+
+func TestRevocationListLoadIsRetriedAfterAFailure(t *testing.T) {
+	statusRetry = 20 * time.Millisecond
+	path := filepath.Join(t.TempDir(), "status.json")
+	v := verifier.New(verifier.Config{PackageName: "com.example.app", Challenges: challenge.NewMemory(time.Minute, 1)})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go refreshStatus(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), v, path)
+
+	time.Sleep(50 * time.Millisecond)
+	if v.StatusLoaded() {
+		t.Fatal("loaded from a missing file")
+	}
+	if err := os.WriteFile(path, []byte(`{"entries":{}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for !v.StatusLoaded() {
+		if time.Now().After(deadline) {
+			t.Fatal("revocation list not loaded after the file appeared")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

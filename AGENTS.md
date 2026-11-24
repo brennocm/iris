@@ -22,10 +22,12 @@ decides on its own; see `docs/adr/0002-signals-not-verdicts.md`.
 
 | Command | What it does |
 | --- | --- |
-| `mise run check` | Definition of done: compile (warnings are errors, C with -Werror), tests, Android lint, `go vet` and Go tests |
+| `mise run check` | Definition of done: ktlint and gofmt, compile (warnings are errors, C with -Werror), tests, Android lint, `go vet` and Go tests |
+| `mise run fix` | Apply ktlint and gofmt |
 | `mise run check:all` | `check` plus release builds for all ABIs and Go tests with `-race` (CI runs this) |
 | `mise run test` | `core` unit tests and Go tests |
 | `./gradlew :iris:connectedDebugAndroidTest` | Device tests on a connected emulator |
+| `scripts/e2e-ci.sh` | Sample app to verifier on a connected emulator, decisions asserted |
 
 Needs `ANDROID_HOME` pointing at an SDK with platform 35, NDK 27.0.12077973 and CMake 3.22.1.
 
@@ -38,6 +40,9 @@ Needs `ANDROID_HOME` pointing at an SDK with platform 35, NDK 27.0.12077973 and 
 - Nothing in the SDK may crash the host app: a missing `libiris.so`, a keystore error or an
   oversized `/proc` file becomes `Unavailable` or `attestation_error`, never an exception.
 - New detection logic gets a JVM test in `core` with a realistic `/proc` fixture.
+- The report format is shared with the verifier through `schema/`. A deliberate format change
+  regenerates `schema/examples` with `IRIS_UPDATE_CONTRACT=1 ./gradlew :core:test`, and the Go
+  report tests must still pass.
 - Public API is explicit (`explicitApi()`); keep `iris` API small.
 - No network access from the SDK, and no logging of report contents (SDK or server).
 - Verifier policy changes come with a test in `internal/verifier`. Never add a config switch

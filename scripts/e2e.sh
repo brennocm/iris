@@ -4,6 +4,7 @@
 # Needs a running iris-verifier (VERIFIER, default http://127.0.0.1:8080), the sample app
 # installed, adb (ADB, default "adb"), curl and python3. FRESH=0 reuses the running app process
 # instead of restarting it (needed after injecting into it, as in the Frida scenario).
+# MESSAGE_OUT=file also saves the signed message the app produced.
 set -euo pipefail
 VERIFIER=${VERIFIER:-http://127.0.0.1:8080}
 ADB=${ADB:-adb}
@@ -34,4 +35,5 @@ if total and len(parts)==total: print("".join(parts[i] for i in range(1,total+1)
 done
 [ -n "$message" ] || { echo "no message from the sample app" >&2; exit 1; }
 
+[ -n "${MESSAGE_OUT:-}" ] && printf '%s' "$message" >"$MESSAGE_OUT"
 printf '{"message":%s}' "$message" | curl -fsS -X POST -H 'Content-Type: application/json' --data-binary @- "$VERIFIER/v1/verify"

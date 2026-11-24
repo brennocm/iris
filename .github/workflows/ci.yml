@@ -16,6 +16,13 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    services:
+      # A real server for the Redis challenge store tests (TestRedisReal).
+      redis:
+        image: redis:7.4-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+        ports: ["6379:6379"]
+    env:
+      IRIS_TEST_REDIS_URL: redis://127.0.0.1:6379/1
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
@@ -31,10 +38,19 @@ jobs:
         env:
           GOTOOLCHAIN: local
         run: mise exec -- go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+      - name: Build the verifier image and smoke test it
+        run: |
+          docker build -t iris-verifier server/
+          docker run -d --name verifier -p 18080:8080 -e IRIS_PACKAGE_NAME=com.example.app -e IRIS_STATUS_SOURCE=off iris-verifier
+          for _ in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:18080/readyz && break; sleep 1; done
+          curl -fsS -X POST http://127.0.0.1:18080/v1/challenge
+          test "$(docker inspect -f '{{.Config.User}}' iris-verifier)" = nonroot:nonroot
+          docker rm -f verifier
 
   device:
     # Instrumented tests on an emulator: native probes run, no false positives without
-    # instrumentation, and the signed message verifies against its attestation chain.
+    # instrumentation, and the signed message verifies against its attestation chain. Then the
+    # end-to-end run: sample app -> verifier, deny with Google roots, review with the test root.
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -58,4 +74,6 @@ jobs:
           target: google_apis
           disable-animations: true
           disk-size: 3G
-          script: mise exec -- ./gradlew --console=plain :iris:connectedDebugAndroidTest
+          script: |
+            mise exec -- ./gradlew --console=plain :iris:connectedDebugAndroidTest
+            mise exec -- scripts/e2e-ci.sh
