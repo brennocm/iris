@@ -31,11 +31,17 @@ func TestChallengesAreSingleUseAndExpire(t *testing.T) {
 	}
 }
 
-func TestIssueIsBounded(t *testing.T) {
+func TestIssueIsBoundedAndReclaimsExpired(t *testing.T) {
+	now := time.Unix(1000, 0)
 	s := NewStore(time.Minute, 2)
+	s.now = func() time.Time { return now }
 	s.Issue()
 	s.Issue()
 	if _, err := s.Issue(); err != ErrFull {
 		t.Fatalf("expected ErrFull, got %v", err)
+	}
+	now = now.Add(2 * time.Minute)
+	if _, err := s.Issue(); err != nil {
+		t.Fatalf("expired challenges were not reclaimed: %v", err)
 	}
 }

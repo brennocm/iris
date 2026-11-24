@@ -35,6 +35,8 @@ Needs `ANDROID_HOME` pointing at an SDK with platform 35, NDK 27.0.12077973 and 
 - Signal codes (`ROOT-001`, …) are part of the report format. Never reuse or renumber one;
   add a new code instead and bump `Report.SCHEMA_VERSION` if the JSON shape changes.
 - File access for detection goes through `NativeProbes`, never `java.io.File` or libc wrappers.
+- Nothing in the SDK may crash the host app: a missing `libiris.so`, a keystore error or an
+  oversized `/proc` file becomes `Unavailable` or `attestation_error`, never an exception.
 - New detection logic gets a JVM test in `core` with a realistic `/proc` fixture.
 - Public API is explicit (`explicitApi()`); keep `iris` API small.
 - No network access from the SDK, and no logging of report contents (SDK or server).

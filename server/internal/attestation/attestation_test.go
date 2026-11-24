@@ -2,9 +2,15 @@ package attestation_test
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/brennocm/iris/server/internal/attestation"
 	"github.com/brennocm/iris/server/internal/attestation/attestationtest"
@@ -73,6 +79,41 @@ func TestVerifyChainRejects(t *testing.T) {
 	spliced := []*x509.Certificate{parse(t, other.DER)[0], chain[1], chain[2]}
 	if _, err := attestation.VerifyChain(spliced, []*x509.Certificate{c.Root}); err == nil {
 		t.Error("spliced chain accepted")
+	}
+}
+
+// An app can sign arbitrary bytes with its own attested key, including a certificate. A leaf
+// forged that way (claiming a locked device, any challenge) chains correctly to the root, so
+// the only thing that stops it is the rule that the attestation extension appears on the leaf
+// alone: the genuine attested key's certificate, now second in the chain, carries one too.
+func TestLeafForgedWithAnAttestedKeyIsRejected(t *testing.T) {
+	genuine := attestationtest.Build(opts())
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(99),
+		NotBefore:    time.Unix(0, 0),
+		NotAfter:     time.Date(2049, 1, 1, 0, 0, 0, 0, time.UTC),
+		ExtraExtensions: []pkix.Extension{{
+			Id: attestation.OIDKeyDescription, Value: attestationtest.KeyDescription(opts()),
+		}},
+	}
+	attacker, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	genuineLeaf := parse(t, genuine.DER)[0]
+	forged, err := x509.CreateCertificate(rand.Reader, tmpl, genuineLeaf, &attacker.PublicKey, genuine.LeafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chain := parse(t, append([][]byte{forged}, genuine.DER...))
+	if _, err := attestation.VerifyChain(chain, []*x509.Certificate{genuine.Root}); !errors.Is(err, attestation.ErrExtensionMisuse) {
+		t.Fatalf("forged leaf: %v", err)
+	}
+}
+
+func TestBootStateStringIsTotal(t *testing.T) {
+	if got := attestation.BootState(-1).String(); got != "unknown(-1)" {
+		t.Fatal(got)
+	}
+	if got := attestation.BootState(9).String(); got != "unknown(9)" {
+		t.Fatal(got)
 	}
 }
 

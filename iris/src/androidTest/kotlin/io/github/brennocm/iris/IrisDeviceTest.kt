@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
 
 /**
  * Runs on any emulator or device without instrumentation attached. Root signals depend on the
- * image, so they are not asserted here; scripts/scenarios.sh covers rooted and Frida runs.
+ * image, so they are not asserted here; docs/scenarios.md covers rooted and Frida runs.
  */
 @RunWith(AndroidJUnit4::class)
 class IrisDeviceTest {

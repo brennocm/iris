@@ -45,7 +45,11 @@ const (
 )
 
 func (b BootState) String() string {
-	return [...]string{"verified", "self-signed", "unverified", "failed"}[min(int(b), 3)]
+	names := [...]string{"verified", "self-signed", "unverified", "failed"}
+	if b < 0 || int(b) >= len(names) {
+		return fmt.Sprintf("unknown(%d)", int(b))
+	}
+	return names[b]
 }
 
 // RootOfTrust describes the device's boot chain.

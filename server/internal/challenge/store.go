@@ -37,13 +37,17 @@ func (s *Store) Issue() ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	for k, exp := range s.items {
-		if now.After(exp) {
-			delete(s.items, k)
-		}
-	}
 	if len(s.items) >= s.max {
-		return nil, ErrFull
+		// Sweep expired entries only when full, so a burst of requests does not scan the
+		// whole map on every call.
+		for k, exp := range s.items {
+			if now.After(exp) {
+				delete(s.items, k)
+			}
+		}
+		if len(s.items) >= s.max {
+			return nil, ErrFull
+		}
 	}
 	s.items[string(c)] = now.Add(s.ttl)
 	return c, nil

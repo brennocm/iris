@@ -26,7 +26,8 @@ internal object KeyAttestation {
         val keyStore = KeyStore.getInstance(PROVIDER).apply { load(null) }
         try {
             generate(context, alias, challenge)
-            val key = keyStore.getKey(alias, null) as java.security.PrivateKey
+            val key = keyStore.getKey(alias, null) as? java.security.PrivateKey
+                ?: error("keystore returned no private key")
             val signature = Signature.getInstance("SHA256withECDSA").run {
                 initSign(key)
                 update(payload)

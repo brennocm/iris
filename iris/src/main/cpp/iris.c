@@ -137,8 +137,8 @@ struct pal_dirent64 {
     char d_name[];
 };
 
-#define MAX_THREADS 2048
-#define COMM_LEN 16 /* TASK_COMM_LEN, including the terminator */
+#define MAX_THREADS 65536 /* beyond this the list is reported as unreadable, not truncated */
+#define COMM_LEN 16       /* TASK_COMM_LEN, including the terminator */
 
 JNIEXPORT jobjectArray JNICALL
 Java_io_github_brennocm_iris_NativeProbes_threadNames(JNIEnv *env, jclass clazz) {
@@ -146,21 +146,32 @@ Java_io_github_brennocm_iris_NativeProbes_threadNames(JNIEnv *env, jclass clazz)
     int dir = sys_openat("/proc/self/task", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (dir < 0) return NULL;
 
-    char (*names)[COMM_LEN] = calloc(MAX_THREADS, COMM_LEN);
-    if (names == NULL) {
-        sys_close(dir);
-        return NULL;
-    }
-    int count = 0, failed = 0;
+    int cap = 256, count = 0, failed = 0;
+    char (*names)[COMM_LEN] = calloc((size_t)cap, COMM_LEN);
     char dents[4096];
-    for (;;) {
+    while (names != NULL && !failed) {
         long n = sys_getdents64(dir, dents, sizeof dents);
         if (n < 0) failed = 1;
         if (n <= 0) break;
-        for (long pos = 0; pos < n && count < MAX_THREADS;) {
+        for (long pos = 0; pos < n && !failed;) {
             struct pal_dirent64 *d = (struct pal_dirent64 *)(dents + pos);
             pos += d->d_reclen;
             if (d->d_name[0] < '0' || d->d_name[0] > '9') continue; /* skip . and .. */
+            if (count == cap) {
+                /* A truncated list could hide the agent's threads, so too many is a failure. */
+                if (cap >= MAX_THREADS) {
+                    failed = 1;
+                    break;
+                }
+                char (*grown)[COMM_LEN] = realloc(names, (size_t)cap * 2 * COMM_LEN);
+                if (grown == NULL) {
+                    failed = 1;
+                    break;
+                }
+                memset(grown + cap, 0, (size_t)cap * COMM_LEN);
+                names = grown;
+                cap *= 2;
+            }
             char path[64];
             size_t used = strlen("/proc/self/task/");
             size_t nl = strnlen(d->d_name, sizeof path - used - sizeof "/comm");
@@ -182,6 +193,7 @@ Java_io_github_brennocm_iris_NativeProbes_threadNames(JNIEnv *env, jclass clazz)
     }
     sys_close(dir);
 
+    if (names == NULL) return NULL;
     jobjectArray out = NULL;
     jclass string_class = failed ? NULL : (*env)->FindClass(env, "java/lang/String");
     if (string_class != NULL) out = (*env)->NewObjectArray(env, count, string_class, NULL);

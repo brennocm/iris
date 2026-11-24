@@ -5,9 +5,19 @@ package io.github.brennocm.iris
  * does not blind them. Implemented in src/main/cpp/iris.c.
  */
 internal object NativeProbes {
-    init {
-        System.loadLibrary("iris")
+    private val loaded: Boolean by lazy {
+        try {
+            System.loadLibrary("iris")
+            true
+        } catch (_: UnsatisfiedLinkError) {
+            false
+        } catch (_: SecurityException) {
+            false
+        }
     }
+
+    /** Loads libiris.so once. False when it is missing or cannot be loaded on this device. */
+    fun load(): Boolean = loaded
 
     /** Contents of [path], at most [maxBytes] bytes, or null if it could not be opened. */
     @JvmStatic
