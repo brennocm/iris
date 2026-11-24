@@ -170,6 +170,10 @@ func TestSignalsDriveTheDecision(t *testing.T) {
 	blind := `{"schema":1,"signals":[],"unavailable":[{"probe":"maps","reason":"could not read /proc/self/maps"}]}`
 	expect(t, verifyCase(t, hook, defaults, nil), Deny, "HOOK-001")
 	expect(t, verifyCase(t, root, defaults, nil), Review, "ROOT-001")
+	emulator := `{"schema":1,"signals":[{"id":"ENV-001","probe":"emulator","evidence":"hardware=ranchu"}],"unavailable":[]}`
+	expect(t, verifyCase(t, emulator, defaults, nil), Review, "ENV-001")
+	inline := `{"schema":1,"signals":[{"id":"HOOK-004","probe":"inline_hooks","evidence":"openat: e9 93 b1 b3"}],"unavailable":[]}`
+	expect(t, verifyCase(t, inline, defaults, nil), Deny, "HOOK-004")
 	expect(t, verifyCase(t, blind, defaults, nil), Review, "probe maps did not run")
 }
 

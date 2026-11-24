@@ -26,7 +26,15 @@ class IrisDeviceTest {
     @Test
     fun nativeProbesRunOnTheDevice() {
         val report = Iris().inspect(context)
-        for (probe in listOf(Probe.MAPS, Probe.MOUNTS, Probe.THREADS, Probe.TRACER, Probe.SU_PATHS)) {
+        for (probe in listOf(
+            Probe.MAPS,
+            Probe.MOUNTS,
+            Probe.THREADS,
+            Probe.TRACER,
+            Probe.SU_PATHS,
+            Probe.INLINE_HOOKS,
+            Probe.ART_HOOKS,
+        )) {
             assertNull("$probe should run, got ${report.unavailable[probe]}", report.unavailable[probe])
         }
     }

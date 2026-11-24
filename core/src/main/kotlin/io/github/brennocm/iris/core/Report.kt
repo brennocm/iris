@@ -11,6 +11,10 @@ public enum class Probe(public val key: String) {
     DEBUGGABLE("debuggable"),
     JAVA_DEBUGGER("java_debugger"),
     SIGNING_CERT("signing_cert"),
+    EMULATOR("emulator"),
+    FRIDA_PORT("frida_port"),
+    INLINE_HOOKS("inline_hooks"),
+    ART_HOOKS("art_hooks"),
 }
 
 /**

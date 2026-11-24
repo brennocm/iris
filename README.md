@@ -49,6 +49,12 @@ device to the server, and the server decides.
 | DEBUG-002 | debuggable build | `FLAG_DEBUGGABLE` |
 | DEBUG-003 | Java debugger | `Debug.isDebuggerConnected()` |
 | TAMPER-001 | repackaged APK | signer SHA-256 against your pins |
+| HOOK-003 | frida-server running | port 27042 in `/proc/net/tcp*`, or a loopback connect |
+| HOOK-004 | inline hooks in libc | function prologues in memory against the libc file on disk |
+| HOOK-005 | Java methods replaced by Frida | Java methods that report the native modifier |
+| HOOK-006 | Xposed, LSPosed and forks | hooker classes on stacks, framework classes loadable |
+| ENV-001 | emulator build | `Build` fields (`ranchu`, `sdk_gphone`, Genymotion, ...) |
+| ENV-002 | emulator hardware | QEMU and goldfish device files |
 
 ## Usage
 
@@ -89,10 +95,10 @@ unavailable probe or as `attestation_error` in the message.
 [`server/`](server/README.md) is a reference verifier in Go with no dependencies outside the
 standard library. It issues challenges, checks the attestation chain against Google's roots and
 revocation list, the challenge, the app identity, the signature and the root of trust, then
-applies a default policy: HOOK and TAMPER signals deny, ROOT and DEBUG signals and blinded
-probes go to review ([ADR 0006](docs/adr/0006-reference-verifier.md)). Play Integrity
-verdicts are checked behind a `Decoder` interface; wiring the authenticated API call is on the
-roadmap.
+applies a default policy: HOOK and TAMPER signals deny, ROOT, DEBUG and ENV signals and
+blinded probes go to review ([ADR 0006](docs/adr/0006-reference-verifier.md)). With a service
+account key it also checks the Play Integrity verdict. It ships as a distroless Docker image,
+rate limits per client and shares challenges through Redis when it runs as several instances.
 
 ## Results on an emulator
 
@@ -101,12 +107,14 @@ root for the run. Full steps in [docs/scenarios.md](docs/scenarios.md).
 
 | Scenario | Report | Decision |
 | --- | --- | --- |
-| Clean | no signals | review (software attestation, no hardware root of trust) |
-| Clean, Google roots only | no signals | deny (emulator chain is not Google's production root) |
-| Frida injected, libc hooked to hide it | HOOK-001, HOOK-002 | deny |
+| Clean | ENV-001, ENV-002 (it is an emulator) | review (software attestation, no hardware root of trust) |
+| Clean, Google roots only | ENV-001, ENV-002 | deny (emulator chain is not Google's production root) |
+| Frida injected, libc hooked to hide it | HOOK-001, HOOK-002, HOOK-004 on `openat`, `read`, `strstr` | deny |
+| Something listening on 27042, SELinux enforcing | HOOK-003 through the loopback connect | deny |
 
 The Frida run used a script that hooks libc `openat`, `read` and `strstr` to hide the agent.
-Iris reads `/proc` with raw syscalls, so the hooks never saw its reads.
+Iris reads `/proc` with raw syscalls, so the hooks never saw its reads, and the hooks
+themselves show up as `jmp` instructions where the file has the functions' prologues.
 
 ## What it does not do
 

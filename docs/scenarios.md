@@ -24,12 +24,17 @@ and in CI on the same image.
 
 ## Results (2026-11-24, emulator API 34)
 
+Every run below also reports ENV-001 (`hardware=ranchu`, `sdk_gphone64_x86_64`) and ENV-002
+(`/dev/goldfish_address_space`): it is an emulator. The debug build of the sample adds DEBUG-002.
+
 | Scenario | Report | Verifier |
 | --- | --- | --- |
 | Clean launch, Google roots only | no signals, nothing unavailable | **deny**: chain does not end at a trusted root |
 | Clean launch, emulator root trusted | no signals, nothing unavailable | **review**: software attestation, no hardware root of trust |
 | `adb root`, su present | no signals (see below) | not posted; the attestation is the same as the clean run |
-| Frida injected, libc hooks hiding it | HOOK-001 `frida-agent-64.so`, HOOK-002 `gmain`, `gdbus`, `gum-js-loop` | **deny** |
+| Frida injected, libc hooks hiding it | HOOK-001 `frida-agent-64.so`, HOOK-002 `gmain`, `gdbus`, `gum-js-loop`, HOOK-004 `openat`, `read`, `strstr` | **deny** |
+| `nc -L -p 27042` as root (stands in for frida-server), SELinux enforcing | HOOK-003 `127.0.0.1:27042 accepts connections` | **deny** |
+| Same, SELinux permissive | HOOK-003 `tcp6 port 27042 in LISTEN` | **deny** |
 
 ### Root
 
@@ -59,7 +64,20 @@ FRESH=0 scripts/e2e.sh
 ```
 
 Iris reads `/proc` with raw syscalls, so the hooks never ran on its reads and both HOOK
-signals fired. A script that hooks the syscall instruction itself or patches `libiris.so` would
+signals fired. The inline hook check found the three hooks: in memory each function starts with
+`e9` (a `jmp` to Frida's trampoline), in the file with its real prologue.
+
+### frida-server port
+
+Android 10 and later deny apps `/proc/net/tcp`, so under SELinux enforcing the probe falls back
+to a TCP connect to 127.0.0.1:27042 (the app needs the INTERNET permission; without it the probe
+is unavailable). A root `nc -L -p 27042` stood in for frida-server:
+
+```sh
+adb shell "nohup nc -L -p 27042 cat >/dev/null 2>&1 &"
+scripts/e2e.sh
+adb shell "pkill -f 'nc -L'"
+``` A script that hooks the syscall instruction itself or patches `libiris.so` would
 get past this; that is the limit described in the threat model.
 
 ### Attestation

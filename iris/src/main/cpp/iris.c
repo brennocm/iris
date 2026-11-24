@@ -10,9 +10,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -207,5 +209,70 @@ Java_io_github_brennocm_iris_NativeProbes_threadNames(JNIEnv *env, jclass clazz)
         (*env)->DeleteLocalRef(env, s);
     }
     free(names);
+    return out;
+}
+
+/*
+ * Loopback connect to port, for the frida-server check when /proc/net/tcp is denied.
+ * Returns 0 when something accepts the connection, otherwise the negated errno.
+ */
+JNIEXPORT jint JNICALL
+Java_io_github_brennocm_iris_NativeProbes_connectLoopback(JNIEnv *env, jclass clazz, jint port) {
+    (void)env;
+    (void)clazz;
+    if (port <= 0 || port > 65535) return -EINVAL;
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof addr);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+#if defined(__aarch64__) || defined(__x86_64__)
+    int fd = (int)raw_syscall4(__NR_socket, AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0, 0);
+    if (fd < 0) return fd;
+    long r;
+    do {
+        r = raw_syscall4(__NR_connect, fd, (long)&addr, sizeof addr, 0);
+    } while (r == -EINTR);
+    sys_close(fd);
+    return (jint)r;
+#else
+    /* 32-bit x86 only gained direct socket syscalls in Linux 4.3; libc's socketcall works everywhere. */
+    int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    if (fd < 0) return -errno;
+    int r = connect(fd, (struct sockaddr *)&addr, sizeof addr);
+    int err = r < 0 ? -errno : 0;
+    close(fd);
+    return err;
+#endif
+}
+
+/*
+ * Reads length bytes of this process's memory at address through /proc/self/mem, so an
+ * unmapped or protected address gives an error instead of a crash. Returns NULL on failure.
+ */
+JNIEXPORT jbyteArray JNICALL
+Java_io_github_brennocm_iris_NativeProbes_readMemory(JNIEnv *env, jclass clazz, jlong address,
+                                                         jint length) {
+    (void)clazz;
+    if (length <= 0 || length > 4096 || address <= 0) return NULL;
+    unsigned char buf[4096];
+    int fd = sys_openat("/proc/self/mem", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return NULL;
+    long got = 0;
+    while (got < length) {
+#if defined(__aarch64__) || defined(__x86_64__)
+        long n = raw_syscall4(__NR_pread64, fd, (long)(buf + got), length - got, (long)(address + got));
+        if (n == -EINTR) continue;
+#else
+        long n = pread64(fd, buf + got, (size_t)(length - got), (off64_t)(uintptr_t)(address + got));
+        if (n < 0 && errno == EINTR) continue;
+#endif
+        if (n <= 0) break;
+        got += n;
+    }
+    sys_close(fd);
+    if (got != length) return NULL;
+    jbyteArray out = (*env)->NewByteArray(env, length);
+    if (out != NULL) (*env)->SetByteArrayRegion(env, out, 0, length, (const jbyte *)buf);
     return out;
 }

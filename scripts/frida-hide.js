@@ -1,7 +1,8 @@
-// Frida script for the instrumentation scenario (scripts/scenarios.md).
+// Frida script for the instrumentation scenario (docs/scenarios.md).
 // It does what common "Frida bypass" scripts do: hooks libc so reads of /proc/self/maps hide
 // frida lines, and makes strstr() never match "frida". Iris reads /proc with raw syscalls, so
-// these hooks never see its reads and HOOK-001 / HOOK-002 still fire.
+// these hooks never see its reads and HOOK-001 / HOOK-002 still fire; the hooks themselves
+// are what HOOK-004 reports.
 const libc = Process.getModuleByName("libc.so");
 let hidden = 0;
 

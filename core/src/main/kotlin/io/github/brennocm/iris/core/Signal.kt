@@ -1,7 +1,7 @@
 package io.github.brennocm.iris.core
 
 /** What a signal is evidence of. */
-public enum class Category { ROOT, HOOK, DEBUG, TAMPER }
+public enum class Category { ROOT, HOOK, DEBUG, TAMPER, ENV }
 
 /**
  * Stable identifiers. The code is part of the report format: a backend matches on it,
@@ -13,10 +13,16 @@ public enum class SignalId(public val code: String, public val category: Categor
     MAGISK_MOUNT("ROOT-003", Category.ROOT),
     INSTRUMENTATION_LIBRARY("HOOK-001", Category.HOOK),
     INSTRUMENTATION_THREAD("HOOK-002", Category.HOOK),
+    FRIDA_SERVER_PORT("HOOK-003", Category.HOOK),
+    INLINE_HOOK("HOOK-004", Category.HOOK),
+    ART_METHOD_HOOK("HOOK-005", Category.HOOK),
+    XPOSED_FRAMEWORK("HOOK-006", Category.HOOK),
     TRACER_ATTACHED("DEBUG-001", Category.DEBUG),
     DEBUGGABLE_BUILD("DEBUG-002", Category.DEBUG),
     JAVA_DEBUGGER("DEBUG-003", Category.DEBUG),
     SIGNING_CERT_MISMATCH("TAMPER-001", Category.TAMPER),
+    EMULATOR_BUILD("ENV-001", Category.ENV),
+    EMULATOR_DEVICE_FILE("ENV-002", Category.ENV),
 }
 
 /** One observation. [evidence] is what was seen (a path, a thread name), capped in length. */

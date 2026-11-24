@@ -31,6 +31,10 @@ correlated and acted on by a backend.
 | Debuggable | DEBUG-002 | `FLAG_DEBUGGABLE` |
 | Java debugger | DEBUG-003 | `Debug.isDebuggerConnected()` |
 | Signing cert | TAMPER-001 | APK signer SHA-256 against developer pins |
+| Frida port | HOOK-003 | frida-server's port 27042 in LISTEN in `/proc/net/tcp*`, or a loopback connect when those are denied |
+| Inline hooks | HOOK-004 | First 16 bytes of hooked-for-bypass libc functions in memory against the libc file on disk |
+| ART hooks | HOOK-005, HOOK-006 | Java methods that became native (Frida's Java bridge); Xposed/LSPosed hooker classes on stacks or loadable |
+| Emulator | ENV-001, ENV-002 | Emulator build properties; QEMU and goldfish device files |
 
 The report can be sent alone (`inspect`) or signed with a fresh, attested Keystore key bound to
 a server challenge (`inspectAndSign`, ADR 0005). `server/` verifies signed messages and applies

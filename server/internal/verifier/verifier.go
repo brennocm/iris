@@ -215,7 +215,7 @@ func (v *Verifier) checkSignals(d *Decision, r *report.Report) {
 		switch s.Category() {
 		case "HOOK", "TAMPER":
 			d.add(Deny, reason)
-		default: // ROOT, DEBUG and anything newer than this server
+		default: // ROOT, DEBUG, ENV (emulators) and anything newer than this server
 			d.add(Review, reason)
 		}
 	}

@@ -7,7 +7,12 @@ import android.content.pm.PackageManager
 import android.content.pm.Signature
 import android.os.Build
 import android.os.Debug
+import android.os.Looper
+import io.github.brennocm.iris.core.ArtHooks
+import io.github.brennocm.iris.core.Emulator
 import io.github.brennocm.iris.core.Flags
+import io.github.brennocm.iris.core.FridaPorts
+import io.github.brennocm.iris.core.InlineHooks
 import io.github.brennocm.iris.core.Mounts
 import io.github.brennocm.iris.core.PathState
 import io.github.brennocm.iris.core.Probe
@@ -18,6 +23,8 @@ import io.github.brennocm.iris.core.Report
 import io.github.brennocm.iris.core.RootArtifacts
 import io.github.brennocm.iris.core.SigningCert
 import io.github.brennocm.iris.core.Threads
+import java.io.File
+import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.UUID
 
@@ -37,14 +44,38 @@ public class Iris(private val config: IrisConfig = IrisConfig()) {
             results[Probe.MAPS] = procProbe("/proc/self/maps", ProcMaps::evaluate)
             results[Probe.THREADS] = Threads.evaluate(NativeProbes.threadNames()?.toList())
             results[Probe.TRACER] = procProbe("/proc/self/status", ProcStatus::evaluate)
+            results[Probe.FRIDA_PORT] = FridaPorts.evaluate(
+                mapOf("tcp" to procText("/proc/net/tcp"), "tcp6" to procText("/proc/net/tcp6")),
+                NativeProbes::connectLoopback,
+            )
+            results[Probe.INLINE_HOOKS] = InlineHooks.evaluate(
+                procText("/proc/self/maps"),
+                { NativeProbes.readFile(it, MAX_LIB_BYTES) },
+                NativeProbes::readMemory,
+            )
         } else {
             // libiris.so missing or not loadable (unsupported ABI, stripped or tampered APK):
             // report the native probes as blind instead of letting the error crash the app.
-            for (p in listOf(Probe.SU_PATHS, Probe.MOUNTS, Probe.MAPS, Probe.THREADS, Probe.TRACER)) {
+            for (p in NATIVE_PROBES) {
                 results[p] = ProbeResult.Unavailable("native library unavailable")
             }
         }
         results[Probe.BUILD_TAGS] = RootArtifacts.evaluateBuildTags(Build.TAGS)
+        val stat: (String) -> PathState = if (NativeProbes.load()) ::pathState else { _ -> PathState.UNKNOWN }
+        results[Probe.EMULATOR] = Emulator.evaluate(
+            Emulator.BuildInfo(
+                fingerprint = Build.FINGERPRINT.orEmpty(),
+                model = Build.MODEL.orEmpty(),
+                manufacturer = Build.MANUFACTURER.orEmpty(),
+                brand = Build.BRAND.orEmpty(),
+                device = Build.DEVICE.orEmpty(),
+                product = Build.PRODUCT.orEmpty(),
+                hardware = Build.HARDWARE.orEmpty(),
+            ),
+            stat,
+        )
+        results[Probe.ART_HOOKS] =
+            ArtHooks.evaluate(nativeJavaMethods(context), stackClasses(), loadableFrameworkClasses())
         results[Probe.DEBUGGABLE] =
             Flags.debuggable(context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0)
         results[Probe.JAVA_DEBUGGER] = Flags.javaDebugger(Debug.isDebuggerConnected())
@@ -96,6 +127,48 @@ public class Iris(private val config: IrisConfig = IrisConfig()) {
         }
     }
 
+    private fun procText(path: String): String? = NativeProbes.readFile(path, MAX_PROC_BYTES)?.toString(Charsets.UTF_8)
+
+    /**
+     * Methods compiled from Java whose modifiers now say native: the trace Frida's Java bridge
+     * leaves when it replaces a method. Checked on this SDK's own probe classes (none of which
+     * declares a native method) and on framework methods that bypass scripts commonly hook.
+     */
+    private fun nativeJavaMethods(context: Context): List<String>? = try {
+        val own = listOf(
+            Iris::class.java, IrisMessage::class.java, KeyAttestation::class.java, Report::class.java,
+            Flags::class.java, ProcMaps::class.java, ProcStatus::class.java, Mounts::class.java,
+            Threads::class.java, RootArtifacts::class.java, SigningCert::class.java, Emulator::class.java,
+            FridaPorts::class.java, InlineHooks::class.java, ArtHooks::class.java, PathState.Companion::class.java,
+        ).flatMap { it.declaredMethods.toList() }
+        val framework = listOf(
+            { File::class.java.getMethod("exists") },
+            { Runtime::class.java.getMethod("exec", String::class.java) },
+            { System::class.java.getMethod("getProperty", String::class.java) },
+            { Class::class.java.getMethod("forName", String::class.java) },
+            {
+                context.packageManager.javaClass
+                    .getMethod("getPackageInfo", String::class.java, Int::class.javaPrimitiveType)
+            },
+        ).mapNotNull { lookup -> runCatching(lookup).getOrNull() }
+        (own + framework).filter { Modifier.isNative(it.modifiers) }.map { "${it.declaringClass.name}.${it.name}" }
+    } catch (_: SecurityException) {
+        null
+    } catch (_: LinkageError) {
+        null
+    }
+
+    private fun stackClasses(): List<String> {
+        val main = runCatching { Looper.getMainLooper().thread.stackTrace }.getOrNull().orEmpty()
+        return (Thread.currentThread().stackTrace + main).map { it.className }
+    }
+
+    private fun loadableFrameworkClasses(): List<String> = FRAMEWORK_CLASSES.filter { name ->
+        listOf(ClassLoader.getSystemClassLoader(), Iris::class.java.classLoader).any { loader ->
+            runCatching { Class.forName(name, false, loader) }.isSuccess
+        }
+    }
+
     private fun pathState(path: String): PathState = PathState.fromAccess(NativeProbes.access(path)) {
         NativeProbes.access(path.substringBeforeLast('/') + "/.iris-control-" + UUID.randomUUID())
     }
@@ -121,5 +194,20 @@ public class Iris(private val config: IrisConfig = IrisConfig()) {
 
     private companion object {
         const val MAX_PROC_BYTES = 4 * 1024 * 1024
+        const val MAX_LIB_BYTES = 16 * 1024 * 1024
+        val NATIVE_PROBES = listOf(
+            Probe.SU_PATHS,
+            Probe.MOUNTS,
+            Probe.MAPS,
+            Probe.THREADS,
+            Probe.TRACER,
+            Probe.FRIDA_PORT,
+            Probe.INLINE_HOOKS,
+        )
+        val FRAMEWORK_CLASSES = listOf(
+            "de.robv.android.xposed.XposedBridge",
+            "de.robv.android.xposed.XposedHelpers",
+            "org.lsposed.lspd.core.Main",
+        )
     }
 }
