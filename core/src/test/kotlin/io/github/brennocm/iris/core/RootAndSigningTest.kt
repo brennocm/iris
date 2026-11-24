@@ -7,6 +7,23 @@ import kotlin.test.assertIs
 
 class RootAndSigningTest {
     @Test
+    fun accessResultsMapToPathStates() {
+        val noControl = { error("control must not run") }
+        assertEquals(PathState.PRESENT, PathState.fromAccess(0, noControl))
+        assertEquals(PathState.ABSENT, PathState.fromAccess(-2, noControl))
+        assertEquals(PathState.ABSENT, PathState.fromAccess(-20, noControl))
+        assertEquals(PathState.UNKNOWN, PathState.fromAccess(-5, noControl))
+    }
+
+    @Test
+    fun eaccesMeansPresentOnlyWhenTheDirectoryWasSearched() {
+        // su labelled su_exec: the file is denied but the directory answers ENOENT for others.
+        assertEquals(PathState.PRESENT, PathState.fromAccess(-13) { -2 })
+        // Directory itself unsearchable: EACCES says nothing about the file.
+        assertEquals(PathState.UNKNOWN, PathState.fromAccess(-13) { -13 })
+    }
+
+    @Test
     fun `reports only su paths that exist`() {
         val r = RootArtifacts.evaluateSuPaths { if (it == "/system/xbin/su") PathState.PRESENT else PathState.ABSENT }
         assertEquals(listOf("/system/xbin/su"), assertIs<ProbeResult.Completed>(r).signals.map { it.evidence })

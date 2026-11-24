@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "iris"
-include(":core", ":iris")
+include(":core", ":iris", ":sample")

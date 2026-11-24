@@ -19,6 +19,7 @@ import io.github.brennocm.iris.core.RootArtifacts
 import io.github.brennocm.iris.core.SigningCert
 import io.github.brennocm.iris.core.Threads
 import java.security.MessageDigest
+import java.util.UUID
 
 /**
  * Runs every probe and returns what it saw. The result is evidence for the app's backend,
@@ -45,13 +46,36 @@ public class Iris(private val config: IrisConfig = IrisConfig()) {
         return Report(results)
     }
 
+    /**
+     * Runs [inspect] and signs the report with a fresh hardware-backed key attested with
+     * [challenge], a single-use value obtained from the backend (16 to 128 bytes).
+     *
+     * Key generation can take a second or more, especially with StrongBox. Call it off the
+     * main thread.
+     */
+    public fun inspectAndSign(context: Context, challenge: ByteArray): IrisMessage {
+        require(challenge.size in 16..128) { "challenge must be 16 to 128 bytes" }
+        val report = inspect(context).toJson().toByteArray(Charsets.UTF_8)
+        return try {
+            val signed = KeyAttestation.sign(context, report, challenge)
+            IrisMessage(report, signed.signature, signed.chain, attestationError = null)
+        } catch (e: java.security.GeneralSecurityException) {
+            unattested(report, e)
+        } catch (e: java.security.ProviderException) {
+            unattested(report, e)
+        } catch (e: IllegalStateException) {
+            unattested(report, e)
+        }
+    }
+
+    private fun unattested(report: ByteArray, e: Exception) =
+        IrisMessage(report, ByteArray(0), emptyList(), "${e.javaClass.simpleName}: ${e.message}".take(200))
+
     private fun readText(path: String): String? =
         NativeProbes.readFile(path, MAX_PROC_BYTES)?.toString(Charsets.UTF_8)
 
-    private fun pathState(path: String): PathState = when (NativeProbes.access(path)) {
-        0 -> PathState.PRESENT
-        -ENOENT, -ENOTDIR -> PathState.ABSENT
-        else -> PathState.UNKNOWN // EACCES and friends: SELinux hid it, so we cannot tell
+    private fun pathState(path: String): PathState = PathState.fromAccess(NativeProbes.access(path)) {
+        NativeProbes.access(path.substringBeforeLast('/') + "/.iris-control-" + UUID.randomUUID())
     }
 
     @SuppressLint("PackageManagerGetSignatures") // pre-28 fallback only; 28+ uses signingInfo
@@ -75,7 +99,5 @@ public class Iris(private val config: IrisConfig = IrisConfig()) {
 
     private companion object {
         const val MAX_PROC_BYTES = 4 * 1024 * 1024
-        const val ENOENT = 2
-        const val ENOTDIR = 20
     }
 }

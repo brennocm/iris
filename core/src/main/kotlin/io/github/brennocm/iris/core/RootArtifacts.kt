@@ -1,7 +1,32 @@
 package io.github.brennocm.iris.core
 
 /** Result of checking whether a path exists. */
-public enum class PathState { PRESENT, ABSENT, UNKNOWN }
+public enum class PathState {
+    PRESENT, ABSENT, UNKNOWN;
+
+    public companion object {
+        // Linux errno values; identical on every Android ABI.
+        private const val ENOENT = 2
+        private const val EACCES = 13
+        private const val ENOTDIR = 20
+
+        /**
+         * Classifies the result of `faccessat(path, F_OK)` (0 or a negated errno).
+         *
+         * SELinux answers EACCES for a file the app may not look at, such as `su` labelled
+         * `su_exec` on emulator and userdebug images. EACCES alone is ambiguous: an unsearchable
+         * directory gives the same answer whether or not the file exists. [control] checks a name
+         * that cannot exist in the same directory; if that answers ENOENT the directory was
+         * searched, so the EACCES came from the file itself and the file is there.
+         */
+        public fun fromAccess(result: Int, control: () -> Int): PathState = when (result) {
+            0 -> PRESENT
+            -ENOENT, -ENOTDIR -> ABSENT
+            -EACCES -> if (control() == -ENOENT) PRESENT else UNKNOWN
+            else -> UNKNOWN
+        }
+    }
+}
 
 /** File-system and build-property traces of root. */
 public object RootArtifacts {
