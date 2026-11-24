@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="docs/assets/iris-logo.webp" alt="Iris: Android runtime self-protection SDK" width="520">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/iris-logo-dark.svg">
+    <img src="docs/assets/iris-logo-light.svg" alt="Iris" width="260">
+  </picture>
 </p>
 
 # Iris
