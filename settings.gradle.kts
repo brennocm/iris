@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "palisade"
-include(":core", ":palisade")
+rootProject.name = "iris"
+include(":core", ":iris")

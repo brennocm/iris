@@ -10,7 +10,7 @@ debugger traps and Frida detection each fell to one hook, and the obfuscated sec
 emulated function.
 
 ## Decision
-`Palisade.inspect()` returns a `Report` of signals and unavailable probes, serialized as
+`Iris.inspect()` returns a `Report` of signals and unavailable probes, serialized as
 versioned JSON. It has no `isSafe()` and never blocks, crashes or alters app behaviour. The
 backend combines the report with a Play Integrity verdict and decides.
 

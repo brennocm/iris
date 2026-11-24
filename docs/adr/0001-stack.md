@@ -6,7 +6,7 @@ Accepted, 2026-11-24.
 ## Decision
 - Detection rules and the report format live in `core`, a pure Kotlin/JVM module with no
   Android dependency, so they are unit-tested on any machine in seconds.
-- The Android library (`palisade`, minSdk 24, compileSdk 35) only gathers raw inputs.
+- The Android library (`iris`, minSdk 24, compileSdk 35) only gathers raw inputs.
 - Native code is C (not C++), built with CMake and NDK 27.0.12077973, with `-Werror`, stack
   protector, full RELRO and 16 KB page alignment (required for Android 15+ devices with
   16 KB pages; NDK r27 does not apply it by default).

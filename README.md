@@ -1,6 +1,6 @@
-# palisade
+# Iris
 
-Android runtime self-protection SDK. palisade looks for root, instrumentation (Frida, Xposed,
+Android runtime self-protection SDK. Iris looks for root, instrumentation (Frida, Xposed,
 LSPosed), debuggers and repackaging, and returns what it found as a report for your backend.
 It never blocks or kills the app: the decision belongs on the server, next to a Play Integrity
 verdict.
@@ -13,10 +13,16 @@ verdict.
 
 Every client-side check ends in a boolean, and whoever controls the device controls it. The
 [OWASP UnCrackable write-up](https://brennocm.github.io/articles/en-us/uncrackable.html) shows
-root detection, anti-debugging and Frida detection falling to one hook each. palisade raises
+root detection, anti-debugging and Frida detection falling to one hook each. Iris raises
 the cost of that (file reads go to the kernel by direct syscall, so hooking libc does not blind
 them) and reports probes it could not run, so a blinded check leaves a trace instead of a pass.
 The rest is the backend's job. Details in [the threat model](docs/threat-model.md).
+
+## The name
+
+In Greek myth, Iris is the messenger who carries word between the gods and everyone else. Iris
+does not judge or act; she delivers. The SDK has the same job: it carries what it saw on the
+device to the server, and the server decides.
 
 ## What it checks
 
@@ -35,15 +41,15 @@ The rest is the backend's job. Details in [the threat model](docs/threat-model.m
 ## Usage
 
 ```kotlin
-val palisade = Palisade(
-    PalisadeConfig(
+val iris = Iris(
+    IrisConfig(
         // Play Console > App integrity > App signing key certificate (SHA-256)
         signingCertSha256 = setOf("AB:CD:…"),
     ),
 )
 
 // Off the main thread: it reads several files under /proc.
-val report = palisade.inspect(context)
+val report = iris.inspect(context)
 api.sendEnvironmentReport(report.toJson(), playIntegrityToken)
 ```
 
@@ -71,7 +77,7 @@ mise run check:all   # plus the release AAR for all four ABIs
 ## Layout
 
 - `core/`: detection rules and report format, pure Kotlin, tested on the JVM.
-- `palisade/`: the Android library; `src/main/cpp/` has the native probes.
+- `iris/`: the Android library; `src/main/cpp/` has the native probes.
 - `docs/adr/`: design decisions. `SPEC.md`: scope and roadmap.
 
 ## License

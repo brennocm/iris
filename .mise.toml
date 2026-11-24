@@ -7,7 +7,7 @@ run = "./gradlew --console=plain check"
 
 [tasks."check:all"]
 description = "check plus release builds of every ABI (what CI runs)"
-run = "./gradlew --console=plain check :palisade:assembleRelease"
+run = "./gradlew --console=plain check :iris:assembleRelease"
 
 [tasks.test]
 description = "Unit tests of the pure detection logic"

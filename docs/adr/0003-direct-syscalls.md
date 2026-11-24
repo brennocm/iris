@@ -9,7 +9,7 @@ The cheapest bypass of file-based detection is hooking libc: make `open` fail fo
 this way.
 
 ## Decision
-`palisade.c` issues `openat`, `read`, `close`, `faccessat` and `getdents64` with an inline
+`iris.c` issues `openat`, `read`, `close`, `faccessat` and `getdents64` with an inline
 `svc #0` (arm64) or `syscall` (x86_64) instruction. String matching happens in Kotlin, not in
 libc. On 32-bit ABIs (armeabi-v7a, x86) it falls back to libc's `syscall()` wrapper, which is
 hookable; those ABIs are a small and shrinking share of devices.

@@ -12,7 +12,7 @@ Zygisk modules), inject Frida in spawn or attach mode, use Xposed/LSPosed, attac
 or decompile, modify and re-sign the APK. They can read and change anything in the app's
 process, including this SDK.
 
-## What palisade can do
+## What Iris can do
 
 - Detect default and lazy setups: stock Frida server and gadget names, visible Magisk mounts,
   a ptrace tracer, a repackaged APK, a debuggable build.
@@ -21,9 +21,9 @@ process, including this SDK.
 - Report "could not check" separately from "checked and clean", so a backend can treat a
   blinded probe as suspicious.
 
-## What palisade cannot do
+## What Iris cannot do
 
-- Resist an attacker who hooks the SDK's own Kotlin methods or patches `libpalisade.so`.
+- Resist an attacker who hooks the SDK's own Kotlin methods or patches `libiris.so`.
   Any client-side result can be forged by someone with full control of the process.
 - See Magisk when DenyList hides it, or Frida when its artifacts are renamed.
 - Prove anything to the backend by itself. Until report binding (SPEC roadmap item 3) lands, a

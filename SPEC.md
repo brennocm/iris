@@ -1,4 +1,4 @@
-# palisade: specification
+# Iris: specification
 
 ## Problem
 
@@ -6,7 +6,7 @@ Mobile apps that move money or hold personal data want to know when they run on 
 device, under Frida or Xposed, under a debugger, or after being repackaged. Client-side checks
 alone are easy to bypass: each one ends in a boolean that whoever controls the device can flip.
 
-## What palisade is
+## What Iris is
 
 An Android library that collects evidence (signals) about the runtime environment and returns
 a report for the app's backend, which combines it with a Play Integrity verdict and decides.
