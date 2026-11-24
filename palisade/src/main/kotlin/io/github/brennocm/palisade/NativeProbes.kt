@@ -1,0 +1,23 @@
+package io.github.brennocm.palisade
+
+/**
+ * Reads that must not go through libc, so that hooking `open`, `read` or `strstr` in libc
+ * does not blind them. Implemented in src/main/cpp/palisade.c.
+ */
+internal object NativeProbes {
+    init {
+        System.loadLibrary("palisade")
+    }
+
+    /** Contents of [path], at most [maxBytes] bytes, or null if it could not be opened. */
+    @JvmStatic
+    external fun readFile(path: String, maxBytes: Int): ByteArray?
+
+    /** 0 when [path] exists, otherwise the negated errno from `faccessat(F_OK)`. */
+    @JvmStatic
+    external fun access(path: String): Int
+
+    /** The `comm` name of every thread in this process, or null if the task list is unreadable. */
+    @JvmStatic
+    external fun threadNames(): Array<String>?
+}

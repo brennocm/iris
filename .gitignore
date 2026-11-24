@@ -1,0 +1,22 @@
+# build outputs and caches
+.gradle/
+build/
+.cxx/
+.kotlin/
+*.apk
+*.aab
+# local machine config (sdk.dir)
+local.properties
+# editors / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+# secrets
+.env
+.env.*
+*.jks
+*.keystore
+# agent tooling stays local
+CLAUDE.md
+.claude/

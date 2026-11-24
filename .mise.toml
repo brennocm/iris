@@ -1,0 +1,18 @@
+[tools]
+java = "temurin-17"
+
+[tasks.check]
+description = "Definition of done: compile (warnings are errors), unit tests, Android lint"
+run = "./gradlew --console=plain check"
+
+[tasks."check:all"]
+description = "check plus release builds of every ABI (what CI runs)"
+run = "./gradlew --console=plain check :palisade:assembleRelease"
+
+[tasks.test]
+description = "Unit tests of the pure detection logic"
+run = "./gradlew --console=plain :core:test"
+
+[tasks.fix]
+description = "No auto-formatter wired yet; see SPEC.md roadmap"
+run = "echo 'nothing to fix automatically yet'"
