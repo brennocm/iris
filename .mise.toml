@@ -1,19 +1,20 @@
 [tools]
 java = "temurin-17"
 go = "1.26.11"
+ktlint = "1.8.0"
 
 [tasks.check]
-description = "Definition of done: compile (warnings are errors), unit tests, Android lint"
-run = ["./gradlew --console=plain check", "cd server && go vet ./... && go test ./..."]
+description = "Definition of done: format (ktlint, gofmt), compile (warnings are errors), unit tests, Android lint"
+run = ["ktlint '**/*.kt' '**/*.kts' '!**/build/**'", "test -z \"$(cd server && gofmt -l .)\" || (cd server && gofmt -l . && echo 'gofmt: run mise run fix' && exit 1)", "./gradlew --console=plain check", "cd server && go vet ./... && go test ./..."]
 
 [tasks."check:all"]
 description = "check plus release builds of every ABI (what CI runs)"
-run = ["./gradlew --console=plain check :iris:assembleRelease :sample:assembleRelease", "cd server && go vet ./... && go test -race ./... && go build ./..."]
+run = ["ktlint '**/*.kt' '**/*.kts' '!**/build/**'", "test -z \"$(cd server && gofmt -l .)\"", "./gradlew --console=plain check :iris:assembleRelease :sample:assembleRelease", "cd server && go vet ./... && go test -race ./... && go build ./..."]
 
 [tasks.test]
 description = "Unit tests of the pure detection logic"
 run = ["./gradlew --console=plain :core:test", "cd server && go test ./..."]
 
 [tasks.fix]
-description = "No auto-formatter wired yet; see SPEC.md roadmap"
-run = "echo 'nothing to fix automatically yet'"
+description = "Format Kotlin (ktlint) and Go (gofmt)"
+run = ["ktlint -F '**/*.kt' '**/*.kts' '!**/build/**'", "cd server && gofmt -w ."]

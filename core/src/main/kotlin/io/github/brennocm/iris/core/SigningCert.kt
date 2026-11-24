@@ -22,8 +22,11 @@ public object SigningCert {
         val pins = pinned.map(::normalize).toSet()
         val seen = actual.map(::normalize)
         return ProbeResult.Completed(
-            if (seen.any { it in pins }) emptyList()
-            else listOf(Signal.of(SignalId.SIGNING_CERT_MISMATCH, seen.joinToString(","))),
+            if (seen.any { it in pins }) {
+                emptyList()
+            } else {
+                listOf(Signal.of(SignalId.SIGNING_CERT_MISMATCH, seen.joinToString(",")))
+            },
         )
     }
 }

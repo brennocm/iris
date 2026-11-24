@@ -36,7 +36,10 @@ class RootAndSigningTest {
 
     @Test
     fun `test-keys build tag`() {
-        assertEquals(1, assertIs<ProbeResult.Completed>(RootArtifacts.evaluateBuildTags("dev-keys,test-keys")).signals.size)
+        assertEquals(
+            1,
+            assertIs<ProbeResult.Completed>(RootArtifacts.evaluateBuildTags("dev-keys,test-keys")).signals.size,
+        )
         assertEquals(0, assertIs<ProbeResult.Completed>(RootArtifacts.evaluateBuildTags("release-keys")).signals.size)
         assertEquals(0, assertIs<ProbeResult.Completed>(RootArtifacts.evaluateBuildTags(null)).signals.size)
     }

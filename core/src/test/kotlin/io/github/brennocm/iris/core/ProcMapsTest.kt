@@ -14,7 +14,9 @@ class ProcMapsTest {
 
     @Test
     fun `parses the path, including paths with spaces, and anonymous mappings`() {
-        val m = ProcMaps.parse("7a00-7b00 r-xp 00000000 fd:05 12   /data/local/tmp/my lib.so\n7c00-7d00 rw-p 00000000 00:00 0")
+        val m = ProcMaps.parse(
+            "7a00-7b00 r-xp 00000000 fd:05 12   /data/local/tmp/my lib.so\n7c00-7d00 rw-p 00000000 00:00 0",
+        )
         assertEquals(listOf(ProcMaps.Mapping("r-xp", "/data/local/tmp/my lib.so"), ProcMaps.Mapping("rw-p", "")), m)
     }
 

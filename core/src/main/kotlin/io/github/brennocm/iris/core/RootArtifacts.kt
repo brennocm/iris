@@ -2,7 +2,10 @@ package io.github.brennocm.iris.core
 
 /** Result of checking whether a path exists. */
 public enum class PathState {
-    PRESENT, ABSENT, UNKNOWN;
+    PRESENT,
+    ABSENT,
+    UNKNOWN,
+    ;
 
     public companion object {
         // Linux errno values; identical on every Android ABI.

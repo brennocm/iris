@@ -23,7 +23,10 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        text = TextView(this).apply { setTextIsSelectable(true); setPadding(32, 32, 32, 32) }
+        text = TextView(this).apply {
+            setTextIsSelectable(true)
+            setPadding(32, 32, 32, 32)
+        }
         setContentView(ScrollView(this).apply { addView(text) })
         run(intent)
     }

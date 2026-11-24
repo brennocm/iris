@@ -4,16 +4,16 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.brennocm.iris.core.Category
 import io.github.brennocm.iris.core.Probe
-import java.io.ByteArrayInputStream
-import java.security.SecureRandom
-import java.security.Signature
-import java.security.cert.CertificateFactory
-import java.security.cert.X509Certificate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayInputStream
+import java.security.SecureRandom
+import java.security.Signature
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 
 /**
  * Runs on any emulator or device without instrumentation attached. Root signals depend on the

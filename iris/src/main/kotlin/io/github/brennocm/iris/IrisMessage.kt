@@ -1,7 +1,7 @@
 package io.github.brennocm.iris
 
-import java.security.MessageDigest
 import android.util.Base64
+import java.security.MessageDigest
 
 /**
  * What the app sends to its backend: the report bytes, a signature over them made with a fresh
@@ -25,31 +25,29 @@ public class IrisMessage internal constructor(
     public fun requestHash(): String =
         MessageDigest.getInstance("SHA-256").digest(report).joinToString("") { "%02x".format(it) }
 
-    public fun toJson(): String {
-        return buildString {
-            append("{\"v\":").append(VERSION)
-            append(",\"report\":\"").append(b64(report)).append('"')
-            append(",\"signature\":\"").append(b64(signature)).append('"')
-            append(",\"chain\":[")
-            certificateChain.forEachIndexed { i, c ->
-                if (i > 0) append(',')
-                append('"').append(b64(c)).append('"')
-            }
-            append(']')
-            if (attestationError != null) {
-                // Exception messages are plain text; escape the characters JSON forbids.
-                append(",\"attestation_error\":\"")
-                attestationError.forEach { c ->
-                    when {
-                        c == '"' || c == '\\' -> append('\\').append(c)
-                        c < ' ' -> append("\\u%04x".format(c.code))
-                        else -> append(c)
-                    }
-                }
-                append('"')
-            }
-            append('}')
+    public fun toJson(): String = buildString {
+        append("{\"v\":").append(VERSION)
+        append(",\"report\":\"").append(b64(report)).append('"')
+        append(",\"signature\":\"").append(b64(signature)).append('"')
+        append(",\"chain\":[")
+        certificateChain.forEachIndexed { i, c ->
+            if (i > 0) append(',')
+            append('"').append(b64(c)).append('"')
         }
+        append(']')
+        if (attestationError != null) {
+            // Exception messages are plain text; escape the characters JSON forbids.
+            append(",\"attestation_error\":\"")
+            attestationError.forEach { c ->
+                when {
+                    c == '"' || c == '\\' -> append('\\').append(c)
+                    c < ' ' -> append("\\u%04x".format(c.code))
+                    else -> append(c)
+                }
+            }
+            append('"')
+        }
+        append('}')
     }
 
     private fun b64(bytes: ByteArray): String = Base64.encodeToString(bytes, Base64.NO_WRAP)

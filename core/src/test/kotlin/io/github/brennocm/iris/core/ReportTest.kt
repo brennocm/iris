@@ -9,7 +9,10 @@ class ReportTest {
         val report = Report(
             mapOf(
                 Probe.TRACER to ProbeResult.Unavailable("could not read /proc/self/status"),
-                Probe.MAPS to ProbeResult.Completed(listOf(Signal(SignalId.INSTRUMENTATION_LIBRARY, "/tmp/frida-agent \"64\".so"))),
+                Probe.MAPS to
+                    ProbeResult.Completed(
+                        listOf(Signal(SignalId.INSTRUMENTATION_LIBRARY, "/tmp/frida-agent \"64\".so")),
+                    ),
                 Probe.BUILD_TAGS to ProbeResult.Completed(emptyList()),
             ),
         )
@@ -22,7 +25,14 @@ class ReportTest {
 
     @Test
     fun `escapes control characters`() {
-        val r = Report(mapOf(Probe.THREADS to ProbeResult.Completed(listOf(Signal(SignalId.INSTRUMENTATION_THREAD, "a\u0001\nb")))))
+        val r =
+            Report(
+                mapOf(
+                    Probe.THREADS to ProbeResult.Completed(
+                        listOf(Signal(SignalId.INSTRUMENTATION_THREAD, "a\u0001\nb")),
+                    ),
+                ),
+            )
         assertEquals(true, r.toJson().contains("\"a\\u0001\\nb\""))
     }
 

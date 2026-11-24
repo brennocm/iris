@@ -5,7 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 class ProcStatusTest {
-    private fun status(tracer: String) = "Name:\tcom.example\nState:\tS (sleeping)\nTgid:\t4242\nTracerPid:\t$tracer\nUid:\t10123\n"
+    private fun status(tracer: String) =
+        "Name:\tcom.example\nState:\tS (sleeping)\nTgid:\t4242\nTracerPid:\t$tracer\nUid:\t10123\n"
 
     @Test
     fun `no tracer`() {

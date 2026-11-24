@@ -16,12 +16,18 @@ class MountsAndThreadsTest {
         val mounts = "magisk /system/bin tmpfs rw,seclabel 0 0\n" +
             "/dev/block/sda1 /debug_ramdisk ext4 ro 0 0\n"
         val r = assertIs<ProbeResult.Completed>(Mounts.evaluate(mounts))
-        assertEquals(listOf("magisk on /system/bin", "/dev/block/sda1 on /debug_ramdisk"), r.signals.map { it.evidence })
+        assertEquals(
+            listOf("magisk on /system/bin", "/dev/block/sda1 on /debug_ramdisk"),
+            r.signals.map(Signal::evidence),
+        )
     }
 
     @Test
     fun `frida thread names are reported once`() {
-        val r = assertIs<ProbeResult.Completed>(Threads.evaluate(listOf("main", "RenderThread", "gum-js-loop", "gmain", "gmain")))
+        val r =
+            assertIs<ProbeResult.Completed>(
+                Threads.evaluate(listOf("main", "RenderThread", "gum-js-loop", "gmain", "gmain")),
+            )
         assertEquals(listOf("gum-js-loop", "gmain"), r.signals.map { it.evidence })
     }
 
