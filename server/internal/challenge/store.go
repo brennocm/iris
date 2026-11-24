@@ -2,6 +2,7 @@
 package challenge
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"sync"
@@ -14,9 +15,27 @@ const Size = 32
 // ErrFull is returned when too many challenges are outstanding.
 var ErrFull = errors.New("too many outstanding challenges")
 
-// Store keeps challenges in memory. It is correct for a single instance; several instances
-// behind a load balancer need a shared store (for example Redis with SET NX and a TTL).
-type Store struct {
+// Store issues single-use challenges and consumes them exactly once.
+type Store interface {
+	// Issue returns a new random challenge valid for TTL.
+	Issue(ctx context.Context) ([]byte, error)
+	// Consume reports whether c was issued, has not expired and has not been used, and marks
+	// it used. An error means the store could not answer, not that the challenge is invalid.
+	Consume(ctx context.Context, c []byte) (bool, error)
+	TTL() time.Duration
+}
+
+func newChallenge() ([]byte, error) {
+	c := make([]byte, Size)
+	if _, err := rand.Read(c); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// Memory keeps challenges in this process. It is correct for a single instance; several
+// instances behind a load balancer need [Redis].
+type Memory struct {
 	mu    sync.Mutex
 	ttl   time.Duration
 	max   int
@@ -24,14 +43,13 @@ type Store struct {
 	items map[string]time.Time
 }
 
-func NewStore(ttl time.Duration, max int) *Store {
-	return &Store{ttl: ttl, max: max, now: time.Now, items: map[string]time.Time{}}
+func NewMemory(ttl time.Duration, max int) *Memory {
+	return &Memory{ttl: ttl, max: max, now: time.Now, items: map[string]time.Time{}}
 }
 
-// Issue returns a new random challenge.
-func (s *Store) Issue() ([]byte, error) {
-	c := make([]byte, Size)
-	if _, err := rand.Read(c); err != nil {
+func (s *Memory) Issue(context.Context) ([]byte, error) {
+	c, err := newChallenge()
+	if err != nil {
 		return nil, err
 	}
 	s.mu.Lock()
@@ -53,18 +71,15 @@ func (s *Store) Issue() ([]byte, error) {
 	return c, nil
 }
 
-// Consume reports whether c was issued, has not expired and has not been used, and marks it
-// used.
-func (s *Store) Consume(c []byte) bool {
+func (s *Memory) Consume(_ context.Context, c []byte) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	exp, ok := s.items[string(c)]
 	if !ok {
-		return false
+		return false, nil
 	}
 	delete(s.items, string(c))
-	return !s.now().After(exp)
+	return !s.now().After(exp), nil
 }
 
-// TTL is how long an issued challenge stays valid.
-func (s *Store) TTL() time.Duration { return s.ttl }
+func (s *Memory) TTL() time.Duration { return s.ttl }

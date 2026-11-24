@@ -30,13 +30,17 @@ Go because the standard library covers X.509, ASN.1, ECDSA and HTTP with no depe
 the result is one static binary. The policy is code, not configuration: changing it should be
 a reviewed diff with tests.
 
-Play Integrity is behind a `Decoder` interface. `GoogleDecoder` calls the API with an HTTP
-client the integrator authenticates (service account); the binary does not wire it yet, so it
-reports "Play Integrity not configured".
+Play Integrity is behind a `Decoder` interface. `GoogleDecoder` calls the API with a client
+authenticated by a service account key (`IRIS_PLAY_INTEGRITY_CREDENTIALS`), using the OAuth 2.0
+JWT bearer grant written against the standard library. Without the key the verifier reports
+"Play Integrity not configured".
 
 ## Consequences
-- The challenge store is in memory, which is correct for one instance only. Several instances
-  need a shared store (for example Redis `SET NX` with a TTL); the type is small on purpose.
+- Challenges live in memory by default, which is correct for one instance only. Several
+  instances use Redis (`IRIS_REDIS_URL`) through a minimal RESP client, to keep the no-dependency
+  rule. If the store cannot answer, the message goes to review: freshness was not checked.
+- `/v1/challenge` and `/v1/verify` are rate limited per client IP, so filling the challenge
+  store or burning CPU on chain checks takes many addresses.
 - Emulators chain to "Droid Unregistered Device CA" and attest in software, so testing against
   one needs `IRIS_EXTRA_ROOTS_PEM` and `IRIS_ALLOW_SOFTWARE_ATTESTATION=true`. Both log a
   warning at startup and must never be set in production.

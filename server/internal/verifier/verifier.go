@@ -67,7 +67,7 @@ type Config struct {
 	// AllowSoftwareAttestation accepts keys attested in software, as on emulators. Never in
 	// production: a software attestation can be produced by anyone with the batch key.
 	AllowSoftwareAttestation bool
-	Challenges               *challenge.Store
+	Challenges               challenge.Store
 	// Integrity is optional. When nil, Play Integrity is reported as not checked.
 	Integrity       integrity.Decoder
 	IntegrityMaxAge time.Duration
@@ -90,6 +90,9 @@ func New(cfg Config) *Verifier {
 	return &Verifier{cfg: cfg}
 }
 
+// StatusLoaded reports whether a revocation list has been loaded.
+func (v *Verifier) StatusLoaded() bool { return v.status.Load() != nil }
+
 // SetStatusList replaces the revocation list (safe for concurrent use).
 func (v *Verifier) SetStatusList(s *attestation.StatusList) { v.status.Store(s) }
 
@@ -106,13 +109,13 @@ func (v *Verifier) Verify(ctx context.Context, m *Message, integrityToken string
 		return d
 	}
 
-	v.checkAttestation(&d, m)
+	v.checkAttestation(ctx, &d, m)
 	v.checkSignals(&d, rep)
 	v.checkIntegrity(ctx, &d, m, integrityToken)
 	return d
 }
 
-func (v *Verifier) checkAttestation(d *Decision, m *Message) {
+func (v *Verifier) checkAttestation(ctx context.Context, d *Decision, m *Message) {
 	if len(m.Chain) == 0 {
 		reason := "attestation unavailable on the device"
 		if m.AttestationError != "" {
@@ -142,7 +145,11 @@ func (v *Verifier) checkAttestation(d *Decision, m *Message) {
 		d.add(Deny, fmt.Sprintf("attestation certificate %s is %s", serial, status))
 		return
 	}
-	if !v.cfg.Challenges.Consume(kd.Challenge) {
+	fresh, err := v.cfg.Challenges.Consume(ctx, kd.Challenge)
+	if err != nil {
+		// Freshness could not be checked, so a replay cannot be ruled out; never allow.
+		d.add(Review, "challenge store unavailable: "+err.Error())
+	} else if !fresh {
 		d.add(Deny, "challenge unknown, expired or already used")
 		return
 	}

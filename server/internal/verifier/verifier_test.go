@@ -51,8 +51,8 @@ func sign(t *testing.T, key *ecdsa.PrivateKey, data []byte) []byte {
 func verifyCase(t *testing.T, report string, opts func([]byte) attestationtest.Options, mutate func(*Config)) Decision {
 	t.Helper()
 	// The root key is random per chain, so build the chain, then trust its root.
-	store := challenge.NewStore(time.Minute, 100)
-	c, _ := store.Issue()
+	store := challenge.NewMemory(time.Minute, 100)
+	c, _ := store.Issue(context.Background())
 	chain := attestationtest.Build(opts(c))
 	cfg := Config{PackageName: pkg, SigningCertDigests: [][]byte{digest}, Roots: []*x509.Certificate{chain.Root}, Challenges: store}
 	if mutate != nil {
@@ -85,8 +85,8 @@ func TestCleanAttestedReportIsAllowed(t *testing.T) {
 }
 
 func TestChallengeCannotBeReplayed(t *testing.T) {
-	store := challenge.NewStore(time.Minute, 100)
-	c, _ := store.Issue()
+	store := challenge.NewMemory(time.Minute, 100)
+	c, _ := store.Issue(context.Background())
 	chain := attestationtest.Build(defaults(c))
 	v := New(Config{PackageName: pkg, SigningCertDigests: [][]byte{digest}, Roots: []*x509.Certificate{chain.Root}, Challenges: store})
 	v.SetStatusList(&attestation.StatusList{})
@@ -96,7 +96,7 @@ func TestChallengeCannotBeReplayed(t *testing.T) {
 }
 
 func TestUnissuedChallengeIsDenied(t *testing.T) {
-	store := challenge.NewStore(time.Minute, 100)
+	store := challenge.NewMemory(time.Minute, 100)
 	chain := attestationtest.Build(defaults([]byte("made-up-challenge-by-the-client!")))
 	v := New(Config{PackageName: pkg, Roots: []*x509.Certificate{chain.Root}, Challenges: store})
 	v.SetStatusList(&attestation.StatusList{})
@@ -142,8 +142,8 @@ func TestSoftwareAttestationCanBeAllowedForEmulators(t *testing.T) {
 }
 
 func TestForgedSignatureIsDenied(t *testing.T) {
-	store := challenge.NewStore(time.Minute, 100)
-	c, _ := store.Issue()
+	store := challenge.NewMemory(time.Minute, 100)
+	c, _ := store.Issue(context.Background())
 	chain := attestationtest.Build(defaults(c))
 	v := New(Config{PackageName: pkg, Roots: []*x509.Certificate{chain.Root}, Challenges: store})
 	v.SetStatusList(&attestation.StatusList{})
@@ -174,14 +174,14 @@ func TestSignalsDriveTheDecision(t *testing.T) {
 }
 
 func TestUnattestedMessageIsReviewed(t *testing.T) {
-	v := New(Config{PackageName: pkg, Challenges: challenge.NewStore(time.Minute, 1)})
+	v := New(Config{PackageName: pkg, Challenges: challenge.NewMemory(time.Minute, 1)})
 	m := &Message{V: 1, Report: []byte(cleanReport), AttestationError: "ProviderException: no keystore"}
 	expect(t, v.Verify(context.Background(), m, ""), Review, "ProviderException")
 }
 
 func TestRevocationListMissingOrHit(t *testing.T) {
-	store := challenge.NewStore(time.Minute, 100)
-	c, _ := store.Issue()
+	store := challenge.NewMemory(time.Minute, 100)
+	c, _ := store.Issue(context.Background())
 	o := defaults(c)
 	o.LeafSerial = 0xbad
 	chain := attestationtest.Build(o)
@@ -189,7 +189,7 @@ func TestRevocationListMissingOrHit(t *testing.T) {
 	m := &Message{V: 1, Report: []byte(cleanReport), Signature: sign(t, chain.LeafKey, []byte(cleanReport)), Chain: chain.DER}
 	expect(t, v.Verify(context.Background(), m, ""), Review, "revocation list unavailable")
 
-	c2, _ := store.Issue()
+	c2, _ := store.Issue(context.Background())
 	o.Challenge = c2
 	chain = attestationtest.Build(o)
 	v = New(Config{PackageName: pkg, Roots: []*x509.Certificate{chain.Root}, Challenges: store})
@@ -219,8 +219,8 @@ func TestPlayIntegrityIsBoundToTheReport(t *testing.T) {
 	sum := sha256.Sum256([]byte(cleanReport))
 	good := hex.EncodeToString(sum[:])
 	run := func(v *integrity.Verdict, token string) Decision {
-		store := challenge.NewStore(time.Minute, 100)
-		c, _ := store.Issue()
+		store := challenge.NewMemory(time.Minute, 100)
+		c, _ := store.Issue(context.Background())
 		chain := attestationtest.Build(defaults(c))
 		ver := New(Config{PackageName: pkg, Roots: []*x509.Certificate{chain.Root}, Challenges: store,
 			Integrity: fakeDecoder{v}, Now: func() time.Time { return now }})
@@ -265,4 +265,15 @@ func TestMessageJSONMatchesTheSDK(t *testing.T) {
 	if string(m.Report) != `{"schema":1}` || len(m.Signature) != 3 || len(m.Chain) != 1 || m.AttestationError != "x" {
 		t.Fatalf("%+v", m)
 	}
+}
+
+type brokenStore struct{ challenge.Store }
+
+func (brokenStore) Consume(context.Context, []byte) (bool, error) {
+	return false, fmt.Errorf("connection refused")
+}
+
+func TestChallengeStoreOutageIsNeverAllowed(t *testing.T) {
+	d := verifyCase(t, cleanReport, defaults, func(c *Config) { c.Challenges = brokenStore{c.Challenges} })
+	expect(t, d, Review, "challenge store unavailable")
 }

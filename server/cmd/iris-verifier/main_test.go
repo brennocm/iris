@@ -10,15 +10,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/brennocm/iris/server/internal/attestation"
 	"github.com/brennocm/iris/server/internal/challenge"
+	"github.com/brennocm/iris/server/internal/ratelimit"
 	"github.com/brennocm/iris/server/internal/verifier"
 )
 
 func server(t *testing.T) *httptest.Server {
 	t.Helper()
-	store := challenge.NewStore(time.Minute, 10)
+	store := challenge.NewMemory(time.Minute, 10)
 	v := verifier.New(verifier.Config{PackageName: "com.example.app", Challenges: store})
-	srv := httptest.NewServer(routes(slog.New(slog.NewTextHandler(io.Discard, nil)), v, store))
+	srv := httptest.NewServer(routes(deps{
+		log: slog.New(slog.NewTextHandler(io.Discard, nil)), v: v, store: store,
+		limiter: ratelimit.New(600, 100, 100),
+	}))
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -75,5 +80,43 @@ func TestVerifyRejectsMalformedAndOversizedBodies(t *testing.T) {
 	}
 	if resp, _ := http.Get(srv.URL + "/v1/verify"); resp.StatusCode != http.StatusMethodNotAllowed {
 		t.Errorf("GET /v1/verify: status %d", resp.StatusCode)
+	}
+}
+
+func TestReadyzWaitsForTheRevocationList(t *testing.T) {
+	store := challenge.NewMemory(time.Minute, 10)
+	v := verifier.New(verifier.Config{PackageName: "com.example.app", Challenges: store})
+	srv := httptest.NewServer(routes(deps{
+		log: slog.New(slog.NewTextHandler(io.Discard, nil)), v: v, store: store,
+		limiter: ratelimit.New(600, 100, 100),
+	}))
+	defer srv.Close()
+	if resp, _ := http.Get(srv.URL + "/readyz"); resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("ready before the revocation list loaded: %d", resp.StatusCode)
+	}
+	v.SetStatusList(&attestation.StatusList{})
+	if resp, _ := http.Get(srv.URL + "/readyz"); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("not ready after load: %d", resp.StatusCode)
+	}
+}
+
+func TestChallengeEndpointIsRateLimited(t *testing.T) {
+	store := challenge.NewMemory(time.Minute, 100)
+	v := verifier.New(verifier.Config{PackageName: "com.example.app", Challenges: store})
+	srv := httptest.NewServer(routes(deps{
+		log: slog.New(slog.NewTextHandler(io.Discard, nil)), v: v, store: store,
+		limiter: ratelimit.New(1, 3, 100),
+	}))
+	defer srv.Close()
+	codes := []int{}
+	for i := 0; i < 4; i++ {
+		resp, err := http.Post(srv.URL+"/v1/challenge", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		codes = append(codes, resp.StatusCode)
+	}
+	if codes[2] != http.StatusOK || codes[3] != http.StatusTooManyRequests {
+		t.Fatalf("status codes %v", codes)
 	}
 }

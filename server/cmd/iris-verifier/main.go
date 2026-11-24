@@ -13,12 +13,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/brennocm/iris/server/internal/attestation"
 	"github.com/brennocm/iris/server/internal/challenge"
+	"github.com/brennocm/iris/server/internal/integrity"
+	"github.com/brennocm/iris/server/internal/ratelimit"
 	"github.com/brennocm/iris/server/internal/verifier"
 )
 
@@ -28,15 +31,20 @@ type config struct {
 	port, packageName, extraRoots, statusSource string
 	digests                                     [][]byte
 	allowSoftware                               bool
+	redisURL, integrityCredentials, ipHeader    string
+	ratePerMinute, rateBurst                    int
 }
 
 func loadConfig() (config, error) {
 	c := config{
-		port:          getenv("PORT", "8080"),
-		packageName:   os.Getenv("IRIS_PACKAGE_NAME"),
-		extraRoots:    os.Getenv("IRIS_EXTRA_ROOTS_PEM"),
-		statusSource:  getenv("IRIS_STATUS_SOURCE", statusURL),
-		allowSoftware: os.Getenv("IRIS_ALLOW_SOFTWARE_ATTESTATION") == "true",
+		port:                 getenv("PORT", "8080"),
+		packageName:          os.Getenv("IRIS_PACKAGE_NAME"),
+		extraRoots:           os.Getenv("IRIS_EXTRA_ROOTS_PEM"),
+		statusSource:         getenv("IRIS_STATUS_SOURCE", statusURL),
+		allowSoftware:        os.Getenv("IRIS_ALLOW_SOFTWARE_ATTESTATION") == "true",
+		redisURL:             os.Getenv("IRIS_REDIS_URL"),
+		integrityCredentials: os.Getenv("IRIS_PLAY_INTEGRITY_CREDENTIALS"),
+		ipHeader:             os.Getenv("IRIS_CLIENT_IP_HEADER"),
 	}
 	if c.packageName == "" {
 		return c, errors.New("IRIS_PACKAGE_NAME is required")
@@ -48,6 +56,13 @@ func loadConfig() (config, error) {
 		}
 		c.digests = append(c.digests, b)
 	}
+	var err error
+	if c.ratePerMinute, err = intEnv("IRIS_RATE_LIMIT_PER_MINUTE", 30); err != nil {
+		return c, err
+	}
+	if c.rateBurst, err = intEnv("IRIS_RATE_LIMIT_BURST", 10); err != nil {
+		return c, err
+	}
 	return c, nil
 }
 
@@ -56,6 +71,18 @@ func getenv(k, def string) string {
 		return v
 	}
 	return def
+}
+
+func intEnv(k string, def int) (int, error) {
+	v := os.Getenv(k)
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0, fmt.Errorf("%s: %q is not a positive integer", k, v)
+	}
+	return n, nil
 }
 
 func main() {
@@ -82,6 +109,7 @@ func run(log *slog.Logger) error {
 			return fmt.Errorf("IRIS_EXTRA_ROOTS_PEM: %w", err)
 		}
 		roots = append(roots, extra...)
+		log.Warn("extra attestation roots trusted: test setups only", "count", len(extra))
 	}
 	if len(cfg.digests) == 0 {
 		log.Warn("IRIS_SIGNING_CERT_SHA256 not set: repackaged apps will not be detected")
@@ -90,22 +118,52 @@ func run(log *slog.Logger) error {
 		log.Warn("software attestation allowed: test setups only")
 	}
 
-	store := challenge.NewStore(2*time.Minute, 100_000)
-	v := verifier.New(verifier.Config{
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	d := deps{log: log, ipHeader: cfg.ipHeader, limiter: ratelimit.New(cfg.ratePerMinute, cfg.rateBurst, 100_000)}
+	if cfg.redisURL != "" {
+		r, err := challenge.NewRedis(cfg.redisURL, challengeTTL)
+		if err != nil {
+			return fmt.Errorf("IRIS_REDIS_URL: %w", err)
+		}
+		if err := r.Ping(ctx); err != nil {
+			return fmt.Errorf("IRIS_REDIS_URL: %w", err)
+		}
+		d.store, d.redis = r, r
+		log.Info("challenge store: redis")
+	} else {
+		d.store = challenge.NewMemory(challengeTTL, 100_000)
+		log.Info("challenge store: memory (single instance only)")
+	}
+
+	vcfg := verifier.Config{
 		PackageName:              cfg.packageName,
 		SigningCertDigests:       cfg.digests,
 		Roots:                    roots,
 		AllowSoftwareAttestation: cfg.allowSoftware,
-		Challenges:               store,
-	})
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	go refreshStatus(ctx, log, v, cfg.statusSource)
+		Challenges:               d.store,
+	}
+	if cfg.integrityCredentials != "" {
+		data, err := os.ReadFile(cfg.integrityCredentials)
+		if err != nil {
+			return fmt.Errorf("IRIS_PLAY_INTEGRITY_CREDENTIALS: %w", err)
+		}
+		sa, err := integrity.ParseServiceAccount(data, integrity.Scope)
+		if err != nil {
+			return fmt.Errorf("IRIS_PLAY_INTEGRITY_CREDENTIALS: %w", err)
+		}
+		vcfg.Integrity = &integrity.GoogleDecoder{Client: sa.Client(), PackageName: cfg.packageName}
+		log.Info("play integrity: enabled")
+	} else {
+		log.Warn("IRIS_PLAY_INTEGRITY_CREDENTIALS not set: Play Integrity verdicts are not checked")
+	}
+	d.v = verifier.New(vcfg)
+	go refreshStatus(ctx, log, d.v, cfg.statusSource)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.port,
-		Handler:           routes(log, v, store),
+		Handler:           routes(d),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -123,20 +181,47 @@ func run(log *slog.Logger) error {
 	return srv.Shutdown(shutdown)
 }
 
-func routes(log *slog.Logger, v *verifier.Verifier, store *challenge.Store) http.Handler {
+const challengeTTL = 2 * time.Minute
+
+type deps struct {
+	log      *slog.Logger
+	v        *verifier.Verifier
+	store    challenge.Store
+	redis    *challenge.Redis // nil with the memory store
+	limiter  *ratelimit.Limiter
+	ipHeader string
+}
+
+func routes(d deps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.HandleFunc("POST /v1/challenge", func(w http.ResponseWriter, _ *http.Request) {
-		c, err := store.Issue()
+	// Ready once the revocation list is loaded and the shared store answers.
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		if !d.v.StatusLoaded() {
+			http.Error(w, "revocation list not loaded", http.StatusServiceUnavailable)
+			return
+		}
+		if d.redis != nil {
+			if err := d.redis.Ping(r.Context()); err != nil {
+				http.Error(w, "challenge store unavailable", http.StatusServiceUnavailable)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	limited := func(h http.HandlerFunc) http.Handler { return d.limiter.Middleware(d.ipHeader, h) }
+	mux.Handle("POST /v1/challenge", limited(func(w http.ResponseWriter, r *http.Request) {
+		c, err := d.store.Issue(r.Context())
 		if err != nil {
+			d.log.Warn("challenge issue failed", "err", err)
 			http.Error(w, "try again later", http.StatusServiceUnavailable)
 			return
 		}
-		writeJSON(w, map[string]any{"challenge": c, "expires_in": int(store.TTL().Seconds())})
-	})
-	mux.HandleFunc("POST /v1/verify", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"challenge": c, "expires_in": int(d.store.TTL().Seconds())})
+	}))
+	mux.Handle("POST /v1/verify", limited(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Message        *verifier.Message `json:"message"`
 			IntegrityToken string            `json:"integrity_token"`
@@ -146,11 +231,11 @@ func routes(log *slog.Logger, v *verifier.Verifier, store *challenge.Store) http
 			http.Error(w, "expected {\"message\": {...}, \"integrity_token\": \"...\"}", http.StatusBadRequest)
 			return
 		}
-		d := v.Verify(r.Context(), req.Message, req.IntegrityToken)
+		dec := d.v.Verify(r.Context(), req.Message, req.IntegrityToken)
 		// Log the decision, not the report: evidence can contain device paths.
-		log.Info("verify", "action", d.Action.String(), "reasons", len(d.Reasons))
-		writeJSON(w, d)
-	})
+		d.log.Info("verify", "action", dec.Action.String(), "reasons", len(dec.Reasons))
+		writeJSON(w, dec)
+	}))
 	return mux
 }
 
