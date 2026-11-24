@@ -23,4 +23,8 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    // Shared report examples (see ContractTest); declared as an input so edits rerun the test.
+    val schemaDir = rootProject.layout.projectDirectory.dir("schema")
+    inputs.dir(schemaDir)
+    systemProperty("iris.schemaDir", schemaDir.asFile.path)
 }

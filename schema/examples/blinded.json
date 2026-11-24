@@ -1,0 +1,1 @@
+{"schema":1,"signals":[{"id":"ROOT-003","probe":"mounts","evidence":"magisk on /debug_ramdisk \"quoted\"\ttab"}],"unavailable":[{"probe":"maps","reason":"/proc/self/maps is larger than 4194304 bytes"},{"probe":"tracer","reason":"native library unavailable"}]}

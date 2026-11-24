@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/brennocm/iris/schema/report.schema.json",
+  "title": "Iris report",
+  "description": "What Report.toJson() produces and the verifier parses. The files in examples/ are produced byte for byte by core's ContractTest and parsed by server/internal/report.",
+  "type": "object",
+  "required": ["schema", "signals", "unavailable"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": 1 },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "probe", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Stable code. Never reused for another meaning.",
+            "type": "string",
+            "pattern": "^(ROOT|HOOK|DEBUG|TAMPER|ENV)-[0-9]{3}$"
+          },
+          "probe": { "$ref": "#/$defs/probe" },
+          "evidence": { "type": "string", "maxLength": 256 }
+        }
+      }
+    },
+    "unavailable": {
+      "description": "Probes that could not run. Not the same as clean.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["probe", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "probe": { "$ref": "#/$defs/probe" },
+          "reason": { "type": "string" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "probe": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+  }
+}

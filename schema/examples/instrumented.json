@@ -1,0 +1,1 @@
+{"schema":1,"signals":[{"id":"ROOT-001","probe":"su_paths","evidence":"/system/xbin/su"},{"id":"HOOK-001","probe":"maps","evidence":"/memfd:frida-agent-64.so (deleted)"},{"id":"HOOK-002","probe":"threads","evidence":"gmain"},{"id":"HOOK-002","probe":"threads","evidence":"gdbus"},{"id":"HOOK-002","probe":"threads","evidence":"gum-js-loop"}],"unavailable":[]}
