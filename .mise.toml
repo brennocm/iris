@@ -8,8 +8,8 @@ description = "Definition of done: format (ktlint, gofmt), compile (warnings are
 run = ["ktlint '**/*.kt' '**/*.kts' '!**/build/**'", "test -z \"$(cd server && gofmt -l .)\" || (cd server && gofmt -l . && echo 'gofmt: run mise run fix' && exit 1)", "./gradlew --console=plain check", "cd server && go vet ./... && go test ./..."]
 
 [tasks."check:all"]
-description = "check plus release builds of every ABI (what CI runs)"
-run = ["ktlint '**/*.kt' '**/*.kts' '!**/build/**'", "test -z \"$(cd server && gofmt -l .)\"", "./gradlew --console=plain check :iris:assembleRelease :sample:assembleRelease", "cd server && go vet ./... && go test -race ./... && go build ./..."]
+description = "check plus release builds of every ABI and the Maven publications, unsigned (what CI runs)"
+run = ["ktlint '**/*.kt' '**/*.kts' '!**/build/**'", "test -z \"$(cd server && gofmt -l .)\"", "./gradlew --console=plain check :iris:assembleRelease :sample:assembleRelease publishAllPublicationsToStagingRepository", "cd server && go vet ./... && go test -race ./... && go build ./..."]
 
 [tasks.test]
 description = "Unit tests of the pure detection logic"

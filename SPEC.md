@@ -50,12 +50,11 @@ a default policy (ADR 0006).
 ## Roadmap
 
 Done in v0.1: sample app and emulator scenarios (docs/scenarios.md), report binding with key
-attestation, the reference verifier.
+attestation, the reference verifier with Play Integrity, Redis challenges, rate limits and a
+Docker image, a shared report schema, ktlint, end-to-end runs in CI, the HOOK-003..006 and ENV
+signals, and Maven Central publishing (docs/releasing.md).
 
-1. Wire `GoogleDecoder` into the verifier binary (service account auth) and test against a
-   real Play Integrity token.
-2. Run the scenarios on real devices: a locked stock phone, Magisk with DenyList, LSPosed.
-3. A shared challenge store for verifiers running as several instances.
-4. More signals: emulator traits, Frida ports, inline-hook checks on libc prologues, ART method
-   hook detection.
-5. Formatter/linter (ktlint) in `mise run check`; Maven Central publishing.
+1. Run the scenarios on real devices: a locked stock phone, Magisk with DenyList, LSPosed,
+   and test against a real Play Integrity token.
+2. Publish 0.1.0 once the real-device results are in.
+3. Hook checks beyond the first bytes of a fixed libc list, and LSPlant-style ART hooks.

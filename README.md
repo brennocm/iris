@@ -123,6 +123,12 @@ patching `libiris.so` gets past every probe, and the signed message proves fresh
 identity and boot state, not that the report is honest. Name matching misses a renamed Frida,
 and Magisk DenyList hides its mounts. See [the threat model](docs/threat-model.md).
 
+## Installing
+
+Not on Maven Central yet; the publishing setup is ready ([docs/releasing.md](docs/releasing.md))
+and 0.1.0 goes out after the real-device runs. Until then, build from source or use
+`./gradlew publishToMavenLocal`.
+
 ## Building
 
 Requires [mise](https://mise.jdx.dev) (it pins JDK 17 and Go) and an Android SDK with platform 35,

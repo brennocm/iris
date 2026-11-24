@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.maven.publish)
 }
 
 android {
@@ -51,4 +52,28 @@ dependencies {
 
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
+}
+
+// AGP 8.7 generates the AAR's javadoc with a bundled Dokka whose ASM cannot read the sealed
+// types of :core (PermittedSubclasses needs ASM 9), so the javadoc jar holds a README instead.
+// Maven Central requires the jar, not its contents; the sources jar carries the KDoc.
+mavenPublishing {
+    configure(
+        com.vanniktech.maven.publish.AndroidSingleVariantLibrary(
+            variant = "release",
+            sourcesJar = true,
+            publishJavadocJar = false,
+        ),
+    )
+}
+
+val javadocJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("javadoc")
+    from(rootProject.file("docs/javadoc-readme.md")) { rename { "README.md" } }
+}
+
+afterEvaluate {
+    extensions.configure<PublishingExtension> {
+        publications.named<MavenPublication>("maven") { artifact(javadocJar) }
+    }
 }

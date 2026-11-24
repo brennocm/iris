@@ -1,0 +1,41 @@
+name: release
+
+# Publishes iris and iris-core to Maven Central when a v* tag is pushed. The upload lands in
+# the Central Portal as a deployment that the owner releases by hand (docs/releasing.md).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    # Holds the secrets; add required reviewers to it so a tag alone cannot publish.
+    environment: maven-central
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+      - name: Tag matches VERSION_NAME
+        run: |
+          version=$(sed -n 's/^VERSION_NAME=//p' gradle.properties)
+          test "${GITHUB_REF_NAME#v}" = "$version" || { echo "tag $GITHUB_REF_NAME != VERSION_NAME $version"; exit 1; }
+          case "$version" in *-SNAPSHOT) echo "refusing to release a SNAPSHOT"; exit 1 ;; esac
+      - name: Install pinned NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.12077973" "cmake;3.22.1" "platforms;android-35"
+      - run: mise run check:all
+      - name: Upload to the Central Portal
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: mise exec -- ./gradlew --console=plain publishToMavenCentral
