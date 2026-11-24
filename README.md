@@ -12,9 +12,9 @@ LSPosed), debuggers and repackaging, and returns what it found as a report for y
 It never blocks or kills the app: the decision belongs on the server, next to a Play Integrity
 verdict.
 
-> **Status:** early (v0.1, unpublished). The probes build and the detection logic is
-> unit-tested, but they have not yet been exercised on rooted and instrumented devices. Do not
-> rely on it in production yet.
+> **Status:** early (v0.1, unpublished). Tested on an Android 14 emulator, clean, rooted and
+> with Frida injected ([results](docs/scenarios.md)); not yet on a range of real devices. Do
+> not rely on it in production yet.
 
 ## Why signals and not a verdict
 
@@ -55,10 +55,17 @@ val iris = Iris(
     ),
 )
 
-// Off the main thread: it reads several files under /proc.
-val report = iris.inspect(context)
-api.sendEnvironmentReport(report.toJson(), playIntegrityToken)
+// Off the main thread: it reads several files under /proc and uses the keystore.
+val challenge = api.getChallenge()                      // from the verifier, single use
+val message = iris.inspectAndSign(context, challenge)
+api.verify(message.toJson(), playIntegrityToken)         // requestHash = message.requestHash()
 ```
+
+`inspectAndSign` signs the report with a fresh Android Keystore key whose attestation carries
+the challenge, the app's package and signer, and the device's boot state, all vouched for by
+the secure hardware ([ADR 0005](docs/adr/0005-report-binding-key-attestation.md)). Use
+`message.requestHash()` as the Play Integrity request hash so the verdict is bound to this
+report. `iris.inspect(context)` still returns the bare report when you only want to log it.
 
 The report:
 
@@ -70,21 +77,33 @@ The report:
 
 Treat `unavailable` as suspicious, not as clean.
 
+## Verifying on the server
+
+[`server/`](server/README.md) is a reference verifier in Go with no dependencies outside the
+standard library. It issues challenges, checks the attestation chain against Google's roots and
+revocation list, the challenge, the app identity, the signature and the root of trust, then
+applies a default policy: HOOK and TAMPER signals deny, ROOT and DEBUG signals and blinded
+probes go to review ([ADR 0006](docs/adr/0006-reference-verifier.md)).
+
 ## Building
 
-Requires [mise](https://mise.jdx.dev) (it pins JDK 17) and an Android SDK with platform 35,
+Requires [mise](https://mise.jdx.dev) (it pins JDK 17 and Go) and an Android SDK with platform 35,
 NDK 27.0.12077973 and CMake 3.22.1 (`ANDROID_HOME` set).
 
 ```sh
 mise install
-mise run check       # compile, unit tests, lint
-mise run check:all   # plus the release AAR for all four ABIs
+mise run check       # compile, unit tests, lint, Go vet and tests
+mise run check:all   # plus release builds for all four ABIs and the Go race detector
 ```
 
 ## Layout
 
 - `core/`: detection rules and report format, pure Kotlin, tested on the JVM.
-- `iris/`: the Android library; `src/main/cpp/` has the native probes.
+- `iris/`: the Android library; `src/main/cpp/` has the native probes, `src/androidTest/` the
+  device tests.
+- `sample/`: a minimal app used by the device scenarios.
+- `server/`: the reference verifier (Go).
+- `scripts/`: the end-to-end script and the Frida script used in [the scenarios](docs/scenarios.md).
 - `docs/adr/`: design decisions. `SPEC.md`: scope and roadmap.
 
 ## License

@@ -1,17 +1,18 @@
 [tools]
 java = "temurin-17"
+go = "1.26.11"
 
 [tasks.check]
 description = "Definition of done: compile (warnings are errors), unit tests, Android lint"
-run = "./gradlew --console=plain check"
+run = ["./gradlew --console=plain check", "cd server && go vet ./... && go test ./..."]
 
 [tasks."check:all"]
 description = "check plus release builds of every ABI (what CI runs)"
-run = "./gradlew --console=plain check :iris:assembleRelease"
+run = ["./gradlew --console=plain check :iris:assembleRelease :sample:assembleRelease", "cd server && go vet ./... && go test -race ./... && go build ./..."]
 
 [tasks.test]
 description = "Unit tests of the pure detection logic"
-run = "./gradlew --console=plain :core:test"
+run = ["./gradlew --console=plain :core:test", "cd server && go test ./..."]
 
 [tasks.fix]
 description = "No auto-formatter wired yet; see SPEC.md roadmap"

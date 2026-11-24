@@ -32,6 +32,10 @@ correlated and acted on by a backend.
 | Java debugger | DEBUG-003 | `Debug.isDebuggerConnected()` |
 | Signing cert | TAMPER-001 | APK signer SHA-256 against developer pins |
 
+The report can be sent alone (`inspect`) or signed with a fresh, attested Keystore key bound to
+a server challenge (`inspectAndSign`, ADR 0005). `server/` verifies signed messages and applies
+a default policy (ADR 0006).
+
 ## Non-goals
 
 - Deciding, blocking or killing the app on the client.
@@ -41,11 +45,13 @@ correlated and acted on by a backend.
 
 ## Roadmap
 
-1. Sample app and instrumented tests on an emulator (clean, rooted, Frida attached).
-2. Server-side reference verifier (Go): checks the Play Integrity token, binds it to the
-   report through the request hash, and returns a decision.
-3. Report binding: sign the report with a hardware-backed Android Keystore key, using key
-   attestation, so a hooked SDK cannot forge a clean report without the backend noticing.
+Done in v0.1: sample app and emulator scenarios (docs/scenarios.md), report binding with key
+attestation, the reference verifier.
+
+1. Wire `GoogleDecoder` into the verifier binary (service account auth) and test against a
+   real Play Integrity token.
+2. Run the scenarios on real devices: a locked stock phone, Magisk with DenyList, LSPosed.
+3. A shared challenge store for verifiers running as several instances.
 4. More signals: emulator traits, Frida ports, inline-hook checks on libc prologues, ART method
    hook detection.
 5. Formatter/linter (ktlint) in `mise run check`; Maven Central publishing.
